@@ -20,7 +20,7 @@ public sealed class WidgetWindow : Window
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = false;   // 铁律：layered 与 WPF D3D/DWM backdrop 互斥（macdesk-pitfalls）
         ShowInTaskbar = false;
-        ShowActivated = false;
+        ShowActivated = !Program.Opts.NoActivate;   // --activate 时真激活（验证 DWM 材质的非激活回退）
         Background = Brushes.Transparent;
         Title = $"WidgetProto {i} {kind}";
         Width = 340;

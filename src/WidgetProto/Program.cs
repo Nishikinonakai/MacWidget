@@ -17,6 +17,7 @@ public static class Program
         Opts = Options.Parse(args);
         Log($"=== start: n={Opts.N} control={Opts.Control} backdrop={Opts.Backdrop} origin={Opts.Origin} " +
             $"pin={Opts.Pin} widget={Opts.Widget} glass={Opts.Glass} dark={Opts.Dark} noactivate={Opts.NoActivate}");
+        Log($"    raw cmdline: {Environment.CommandLine}");
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.DispatcherUnhandledException += (_, e) => { Log("UNHANDLED: " + e.Exception); e.Handled = true; };
@@ -28,8 +29,10 @@ public static class Program
                 {
                     // 全部组件共享同一个 Environment（同一 udf）→ 共享 browser/GPU 进程，是内存实验的前提
                     var udf = Path.Combine(BaseDir, "udf");
-                    Env = await CoreWebView2Environment.CreateAsync(null, udf, new CoreWebView2EnvironmentOptions());
-                    Log($"webview2 env ready, runtime={Env.BrowserVersionString}");
+                    var envOpts = new CoreWebView2EnvironmentOptions();
+                    if (Opts.ProcPerSite) envOpts.AdditionalBrowserArguments = "--process-per-site";
+                    Env = await CoreWebView2Environment.CreateAsync(null, udf, envOpts);
+                    Log($"webview2 env ready, runtime={Env.BrowserVersionString} procpersite={Opts.ProcPerSite}");
                 }
                 var kinds = new[] { "clock", "monitor", "weather", "photo" };
                 for (int i = 0; i < Opts.N; i++)

@@ -11,6 +11,7 @@ public sealed class Options
     public string Glass = "extend";     // extend(DwmExtendFrameIntoClientArea -1) | none
     public bool Dark = true;
     public bool NoActivate = true;
+    public bool ProcPerSite = false;    // Chromium --process-per-site：强制同 site 合并 renderer（实验）
 
     public static Options Parse(string[] args)
     {
@@ -29,6 +30,7 @@ public sealed class Options
                 case "--glass": o.Glass = Next(); break;
                 case "--light": o.Dark = false; break;
                 case "--activate": o.NoActivate = false; break;
+                case "--procpersite": o.ProcPerSite = true; break;
             }
         }
         if (o.N < 1) o.N = 1;

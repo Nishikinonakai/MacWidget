@@ -55,9 +55,46 @@ public static class Dwm
 
     public static void SetBackdrop(IntPtr hwnd, string kind)
     {
+        if (kind is "wca" or "wcablur") { Wca.Apply(hwnd, kind); return; }
         int v = kind switch { "mica" => 2, "acrylic" => 3, "tabbed" => 4, _ => 1 };
         var hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref v, 4);
         Program.Log($"backdrop {kind}({v}) hr=0x{hr:x}");
+    }
+}
+
+/// <summary>
+/// 未公开路线：SetWindowCompositionAttribute 的 accent 模糊（TranslucentTB/Rainmeter 同款）。
+/// 不依赖窗口激活态；若 DWMSBT 被证实绑激活，这条是产品候选。
+/// </summary>
+public static class Wca
+{
+    [StructLayout(LayoutKind.Sequential)]
+    struct ACCENT_POLICY { public int State; public int Flags; public uint GradientColor; public int AnimationId; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WINCOMPATTRDATA { public int Attribute; public IntPtr Data; public int Size; }
+
+    [DllImport("user32.dll")]
+    static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINCOMPATTRDATA data);
+
+    public static void Apply(IntPtr hwnd, string kind)
+    {
+        // wca = ACCENT_ENABLE_ACRYLICBLURBEHIND(4)，wcablur = ACCENT_ENABLE_BLURBEHIND(3)
+        var pol = new ACCENT_POLICY
+        {
+            State = kind == "wcablur" ? 3 : 4,
+            Flags = 2,
+            GradientColor = 0x40202020,   // AABBGGRR：25% 深灰 tint（acrylic 态要求非零 alpha）
+        };
+        var pin = Marshal.AllocHGlobal(Marshal.SizeOf<ACCENT_POLICY>());
+        try
+        {
+            Marshal.StructureToPtr(pol, pin, false);
+            var data = new WINCOMPATTRDATA { Attribute = 19 /*WCA_ACCENT_POLICY*/, Data = pin, Size = Marshal.SizeOf<ACCENT_POLICY>() };
+            var r = SetWindowCompositionAttribute(hwnd, ref data);
+            Program.Log($"wca {kind} ret={r}");
+        }
+        finally { Marshal.FreeHGlobal(pin); }
     }
 }
 
