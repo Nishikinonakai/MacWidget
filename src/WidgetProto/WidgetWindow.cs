@@ -103,13 +103,110 @@ public sealed class WidgetWindow : Window
         }
     }
 
-    void Setup(CoreWebView2 core, string host)
+    async void Setup(CoreWebView2 core, string host)
     {
         core.SetVirtualHostNameToFolderMapping(host, Program.WebDir, CoreWebView2HostResourceAccessKind.Allow);
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.NavigationCompleted += (_, a) => Program.Log($"widget {_i} ({_kind}) nav done ok={a.IsSuccess}");
+        core.WebMessageReceived += OnWebMessage;
+        // 拖拽由宿主注入，组件作者零感知（产品同款设计）
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(DragJs);
+    }
+
+    // ---- 拖拽摆位 + 网格吸附 + 落点虚影 ----
+
+    const string DragJs = """
+        (function(){
+          if (window.__mwDrag) return; window.__mwDrag = true;
+          let sx=0, sy=0, armed=false, dragging=false;
+          addEventListener('pointerdown', e => {
+            if (e.button !== 0) return;
+            armed = true; dragging = false; sx = e.screenX; sy = e.screenY;
+          }, true);
+          addEventListener('pointermove', e => {
+            if (!armed) return;
+            const dx = e.screenX - sx, dy = e.screenY - sy;
+            if (!dragging && Math.hypot(dx, dy) > 4) {
+              dragging = true;
+              window.chrome.webview.postMessage({ t: 'dragstart' });
+            }
+            if (dragging) window.chrome.webview.postMessage({ t: 'drag', dx: dx, dy: dy });
+          }, true);
+          const end = () => {
+            if (dragging) window.chrome.webview.postMessage({ t: 'dragend' });
+            armed = false; dragging = false;
+          };
+          addEventListener('pointerup', end, true);
+          addEventListener('pointercancel', end, true);
+        })();
+        """;
+
+    double _origL, _origT;
+    bool _dragging;
+    System.Windows.Threading.DispatcherTimer? _anim;
+
+    void OnWebMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(e.WebMessageAsJson);
+            var root = doc.RootElement;
+            switch (root.GetProperty("t").GetString())
+            {
+                case "dragstart":
+                    _anim?.Stop();
+                    _dragging = true;
+                    _origL = Left; _origT = Top;
+                    var (gl, gt) = LayoutGrid.Snap(Left, Top, Width, Height);
+                    GhostWindow.Instance.ShowAt(gl, gt, Width, Height);
+                    Program.Log($"widget {_i} dragstart at ({Left:f0},{Top:f0})");
+                    break;
+                case "drag":
+                    if (!_dragging) break;
+                    // Chromium 的 screenX/Y 是 DIP，与 WPF DIU 同标度（同 DPI 下），直接相加
+                    double nl = _origL + root.GetProperty("dx").GetDouble();
+                    double nt = _origT + root.GetProperty("dy").GetDouble();
+                    MoveTo(nl, nt);
+                    var (sl, st) = LayoutGrid.Snap(nl, nt, Width, Height);
+                    GhostWindow.Instance.MoveTo(sl, st);
+                    break;
+                case "dragend":
+                    if (!_dragging) break;
+                    _dragging = false;
+                    GhostWindow.Instance.HideGhost();
+                    var (tl, tt) = LayoutGrid.Snap(Left, Top, Width, Height);
+                    Program.Log($"widget {_i} dragend at ({Left:f0},{Top:f0}) -> snap ({tl:f0},{tt:f0})");
+                    AnimateTo(tl, tt);
+                    break;
+            }
+        }
+        catch (Exception ex) { Program.Log($"widget {_i} webmsg FAIL: {ex.Message}"); }
+    }
+
+    void MoveTo(double l, double t)
+    {
+        var src = (HwndSource)PresentationSource.FromVisual(this)!;
+        double k = src.CompositionTarget.TransformToDevice.M11;
+        Native.MoveWindow(src.Handle, (int)Math.Round(l * k), (int)Math.Round(t * k),
+            (int)Math.Round(Width * k), (int)Math.Round(Height * k), true);
+    }
+
+    void AnimateTo(double l, double t)
+    {
+        _anim?.Stop();
+        double fl = Left, ft = Top;
+        int frame = 0; const int frames = 10;   // ~160ms cubic ease-out
+        _anim = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _anim.Tick += (_, _) =>
+        {
+            frame++;
+            double p = 1 - Math.Pow(1 - frame / (double)frames, 3);
+            MoveTo(fl + (l - fl) * p, ft + (t - ft) * p);
+            if (frame >= frames) _anim!.Stop();
+        };
+        _anim.Start();
     }
 
     /// <summary>纯 WPF 卡片（对照组：排除 WebView2，单独验证 backdrop 配方是否成立）</summary>

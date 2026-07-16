@@ -1,0 +1,58 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Media;
+
+namespace WidgetProto;
+
+/// <summary>
+/// 落点虚影：拖拽时显示在预测吸附位置的半透明占位（macOS 同款交互）。
+/// 单例复用；WS_EX_TRANSPARENT 全程不吃鼠标；贴底（在被拖组件之下）。
+/// </summary>
+public sealed class GhostWindow : Window
+{
+    static GhostWindow? _inst;
+    public static GhostWindow Instance => _inst ??= new GhostWindow();
+
+    GhostWindow()
+    {
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
+        AllowsTransparency = false;
+        ShowInTaskbar = false;
+        ShowActivated = false;
+        Background = Brushes.Transparent;
+        Title = "WidgetProto Ghost";
+        Content = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
+            BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(16),
+        };
+        SourceInitialized += (_, _) =>
+        {
+            var src = (HwndSource)PresentationSource.FromVisual(this)!;
+            src.CompositionTarget.BackgroundColor = Colors.Transparent;
+            var h = src.Handle;
+            var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
+            ex |= Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE | Native.WS_EX_TRANSPARENT;
+            Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
+            Dwm.SetRoundCorners(h);
+            BottomPin.Install(src);
+        };
+    }
+
+    public void ShowAt(double l, double t, double w, double h)
+    {
+        Width = w; Height = h; Left = l; Top = t;
+        if (!IsVisible) Show();
+    }
+
+    public void MoveTo(double l, double t)
+    {
+        if (Math.Abs(Left - l) > 0.5 || Math.Abs(Top - t) > 0.5) { Left = l; Top = t; }
+    }
+
+    public void HideGhost() { if (IsVisible) Hide(); }
+}

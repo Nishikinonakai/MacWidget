@@ -8,6 +8,10 @@ public static class Native
     public const int GWL_EXSTYLE = -20;
     public const long WS_EX_TOOLWINDOW = 0x00000080;
     public const long WS_EX_NOACTIVATE = 0x08000000;
+    public const long WS_EX_TRANSPARENT = 0x00000020;
+
+    [DllImport("user32.dll")]
+    public static extern bool MoveWindow(IntPtr hwnd, int x, int y, int w, int h, bool repaint);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     public static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
