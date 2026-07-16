@@ -41,6 +41,14 @@ public static class Program
                     new WidgetWindow(i, kind).Show();
                 }
                 Log("all windows shown");
+                // MacDesk 联动：初始占用矩形（等一拍让窗口全部落位）+ 3s 心跳
+                // （心跳兜住 MacDesk 重启后的重连——管道断开时对方已清空，重连即恢复避让）
+                Application.Current.Dispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Loaded,
+                    () => WidgetLink.Send(force: true));
+                var beat = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                beat.Tick += (_, _) => WidgetLink.Send(force: true);
+                beat.Start();
             }
             catch (Exception ex)
             {

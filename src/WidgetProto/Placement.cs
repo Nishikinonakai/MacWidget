@@ -13,7 +13,9 @@ public static class Placement
 {
     public const double Unit = 170;        // Small 单元 = 帧尺寸（缝隙烙在帧内衬里，组内零间隙）
     public const double EdgeMargin = 16;   // 屏幕安全边
-    public const double JoinGap = 20;      // 并组吸附净距（macOS 实测 20pt 净距入组）
+    public const double JoinGap = 20;      // 邻近判定净距（粗筛：找锚组件）
+    public const double SnapDist = 26;     // 真吸附门槛：最近格位距生手位置 ≤ 此值才吸（机主反馈修正：
+                                           // 否则两组件间整条 20 走廊都成吸附区，自由区有"网格感"）
 
     public readonly record struct Result(double L, double T, bool Corrected);
 
@@ -33,7 +35,13 @@ public static class Placement
         if (anchor >= 0)
         {
             var cell = NearestCell(self, others[anchor], others, safe);
-            if (cell is { } c) return new Result(c.X, c.Y, Corrected: true);
+            if (cell is { } c)
+            {
+                bool overlapped = self.IntersectsWith(others[anchor]);
+                double dist = Math.Sqrt((c.X - self.X) * (c.X - self.X) + (c.Y - self.Y) * (c.Y - self.Y));
+                // 重叠必须解算；净距邻近仅当"基本已在格位上"（纠正量小）才吸——其余情况自由
+                if (overlapped || dist <= SnapDist) return new Result(c.X, c.Y, Corrected: true);
+            }
         }
 
         // 2) 自由落地 / 越界钳制

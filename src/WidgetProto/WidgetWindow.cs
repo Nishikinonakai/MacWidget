@@ -169,6 +169,7 @@ public sealed class WidgetWindow : Window
                     double nl = _origL + root.GetProperty("dx").GetDouble();
                     double nt = _origT + root.GetProperty("dy").GetDouble();
                     MoveTo(nl, nt);                  // 自由跟手，不吸不拦
+                    WidgetLink.Send();               // MacDesk 图标实时避让（~15Hz 节流）
                     var res = Resolve(nl, nt);
                     if (res.Corrected) GhostWindow.Instance.ShowAt(res.L, res.T, Width, Height);
                     else GhostWindow.Instance.HideGhost();   // 合法位置 → 无虚影（自由摆放是常态）
@@ -190,6 +191,7 @@ public sealed class WidgetWindow : Window
                     {
                         Program.Log($"widget {_i} dragend free at ({Left:f0},{Top:f0})");
                     }
+                    WidgetLink.Send(force: true);
                     break;
                 }
             }
@@ -227,6 +229,7 @@ public sealed class WidgetWindow : Window
             frame++;
             double p = 1 - Math.Pow(1 - frame / (double)frames, 3);
             MoveTo(fl + (l - fl) * p, ft + (t - ft) * p);
+            WidgetLink.Send(force: frame >= frames);   // 纠正动画期间也持续联动
             if (frame >= frames) _anim!.Stop();
         };
         _anim.Start();
