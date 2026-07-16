@@ -23,12 +23,14 @@ public sealed class GhostWindow : Window
         ShowActivated = false;
         Background = Brushes.Transparent;
         Title = "WidgetProto Ghost";
+        // macOS 实测虚影形态：细白描边圆角矩形、几乎无填充（exp1/exp2-mid 截图）
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
+            Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
             BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(16),
+            CornerRadius = new CornerRadius(18),
+            Margin = new Thickness(2),
         };
         SourceInitialized += (_, _) =>
         {
@@ -38,6 +40,7 @@ public sealed class GhostWindow : Window
             var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
             ex |= Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE | Native.WS_EX_TRANSPARENT;
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
+            Dwm.ExtendIntoClient(h);   // 无 backdrop 的顶层窗必须 extend，否则透明面呈黑底
             Dwm.SetRoundCorners(h);
             BottomPin.Install(src);
         };

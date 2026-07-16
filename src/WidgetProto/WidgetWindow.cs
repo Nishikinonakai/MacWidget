@@ -26,12 +26,12 @@ public sealed class WidgetWindow : Window
         Width = 340;
         Height = kind == "photo" ? 340 : 170;
 
-        // 从工作区右上角起排布，3 列网格（macOS 摆位习惯）
+        // 初始摆位刻意“不规整”（自由摆放是 v2 的一等公民，便于验证非网格落点）
         WindowStartupLocation = WindowStartupLocation.Manual;
         var wa = SystemParameters.WorkArea;
-        int col = i % 3, row = i / 3;
-        Left = wa.Right - 16 - 356 * (col + 1) + (356 - Width);
-        Top = wa.Top + 16 + row * 356;
+        int col = i % 2, row = i / 2;
+        Left = wa.Right - 24 - (Width + 36) * (col + 1) + (col == 0 ? 0 : 13);
+        Top = wa.Top + 20 + row * 220 + i * 7;
 
         SourceInitialized += OnSourceInit;
         Loaded += OnLoaded;
@@ -159,30 +159,53 @@ public sealed class WidgetWindow : Window
                     _anim?.Stop();
                     _dragging = true;
                     _origL = Left; _origT = Top;
-                    var (gl, gt) = LayoutGrid.Snap(Left, Top, Width, Height);
-                    GhostWindow.Instance.ShowAt(gl, gt, Width, Height);
+                    BottomPin.Lift(Hwnd());          // macOS 同款：拖拽中的组件升层
                     Program.Log($"widget {_i} dragstart at ({Left:f0},{Top:f0})");
                     break;
                 case "drag":
+                {
                     if (!_dragging) break;
                     // Chromium 的 screenX/Y 是 DIP，与 WPF DIU 同标度（同 DPI 下），直接相加
                     double nl = _origL + root.GetProperty("dx").GetDouble();
                     double nt = _origT + root.GetProperty("dy").GetDouble();
-                    MoveTo(nl, nt);
-                    var (sl, st) = LayoutGrid.Snap(nl, nt, Width, Height);
-                    GhostWindow.Instance.MoveTo(sl, st);
+                    MoveTo(nl, nt);                  // 自由跟手，不吸不拦
+                    var res = Resolve(nl, nt);
+                    if (res.Corrected) GhostWindow.Instance.ShowAt(res.L, res.T, Width, Height);
+                    else GhostWindow.Instance.HideGhost();   // 合法位置 → 无虚影（自由摆放是常态）
                     break;
+                }
                 case "dragend":
+                {
                     if (!_dragging) break;
                     _dragging = false;
                     GhostWindow.Instance.HideGhost();
-                    var (tl, tt) = LayoutGrid.Snap(Left, Top, Width, Height);
-                    Program.Log($"widget {_i} dragend at ({Left:f0},{Top:f0}) -> snap ({tl:f0},{tt:f0})");
-                    AnimateTo(tl, tt);
+                    BottomPin.Drop(Hwnd());
+                    var res = Resolve(Left, Top);
+                    if (res.Corrected)
+                    {
+                        Program.Log($"widget {_i} dragend at ({Left:f0},{Top:f0}) -> corrected ({res.L:f0},{res.T:f0})");
+                        AnimateTo(res.L, res.T);     // 违规才纠正动画
+                    }
+                    else
+                    {
+                        Program.Log($"widget {_i} dragend free at ({Left:f0},{Top:f0})");
+                    }
                     break;
+                }
             }
         }
         catch (Exception ex) { Program.Log($"widget {_i} webmsg FAIL: {ex.Message}"); }
+    }
+
+    IntPtr Hwnd() => ((HwndSource)PresentationSource.FromVisual(this)!).Handle;
+
+    Placement.Result Resolve(double l, double t)
+    {
+        var others = new List<Rect>();
+        foreach (Window w in Application.Current.Windows)
+            if (w is WidgetWindow ww && !ReferenceEquals(ww, this) && ww.IsVisible)
+                others.Add(new Rect(ww.Left, ww.Top, ww.Width, ww.Height));
+        return Placement.Resolve(new Rect(l, t, Width, Height), others, SystemParameters.WorkArea);
     }
 
     void MoveTo(double l, double t)

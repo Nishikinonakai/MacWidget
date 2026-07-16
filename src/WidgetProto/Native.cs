@@ -110,7 +110,23 @@ public static class BottomPin
 {
     const int WM_WINDOWPOSCHANGING = 0x0046;
     static readonly IntPtr HWND_BOTTOM = new(1);
+    static readonly IntPtr HWND_TOP = IntPtr.Zero;
     const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+
+    static readonly HashSet<IntPtr> _suspended = new();
+
+    /// <summary>拖拽期把组件提离桌面带（macOS 实测同款：拖拽中的组件升层渲染），结束后 Drop 回钉底部。</summary>
+    public static void Lift(IntPtr hwnd)
+    {
+        lock (_suspended) _suspended.Add(hwnd);
+        Native.SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    public static void Drop(IntPtr hwnd)
+    {
+        lock (_suspended) _suspended.Remove(hwnd);
+        Native.SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     struct WINDOWPOS
@@ -130,6 +146,7 @@ public static class BottomPin
     {
         if (msg == WM_WINDOWPOSCHANGING)
         {
+            lock (_suspended) { if (_suspended.Contains(hwnd)) return IntPtr.Zero; }
             var wp = Marshal.PtrToStructure<WINDOWPOS>(lParam);
             if ((wp.flags & SWP_NOZORDER) == 0)
             {
