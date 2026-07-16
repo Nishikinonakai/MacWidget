@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:transparent; width:100%; height:100%; overflow:hidden;
+    font-family:"SF Pro Display","Segoe UI Variable Display","Segoe UI",sans-serif;
+    -webkit-user-select:none; user-select:none; }
+  .card { width:100%; height:100%; border-radius:16px; padding:14px 20px;
+    display:flex; flex-direction:column; justify-content:space-between;
+    background:linear-gradient(160deg, rgba(40,90,180,.38), rgba(20,40,90,.30));
+    border:1px solid rgba(255,255,255,.12); box-shadow:inset 0 1px 0 rgba(255,255,255,.15);
+    color:#fff; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; }
+  .city { font-size:15px; font-weight:600; }
+  .temp { font-size:40px; font-weight:500; line-height:1; }
+  .cond { font-size:13px; opacity:.85; margin-top:2px; }
+  .sun { font-size:34px; animation:float 5s ease-in-out infinite; }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+  .row { display:flex; gap:18px; }
+  .hour { display:flex; flex-direction:column; align-items:center; font-size:12px; gap:2px; opacity:.9; }
+  .hour b { font-weight:600; font-size:13px; }
+</style></head><body>
+<div class="card">
+  <div class="top">
+    <div>
+      <div class="city">北京市</div>
+      <div class="temp">32°</div>
+      <div class="cond">晴 最高 34° 最低 24°</div>
+    </div>
+    <div class="sun">☀️</div>
+  </div>
+  <div class="row">
+    <div class="hour"><span>现在</span>🌞<b>32°</b></div>
+    <div class="hour"><span>15时</span>🌤️<b>33°</b></div>
+    <div class="hour"><span>16时</span>🌤️<b>33°</b></div>
+    <div class="hour"><span>17时</span>⛅<b>31°</b></div>
+    <div class="hour"><span>18时</span>🌇<b>29°</b></div>
+  </div>
+</div>
+</body></html>
