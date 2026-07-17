@@ -184,6 +184,7 @@ public sealed class WidgetWindow : Window
     {
         if (_removing) return;
         _removing = true;
+        Program.Log($"widget {_i} ({Kind}) removing");
         try { _core?.PostWebMessageAsJson("""{"t":"bye"}"""); } catch { }
         var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(230) };
         t.Tick += (_, _) => { t.Stop(); Close(); };
@@ -204,6 +205,9 @@ public sealed class WidgetWindow : Window
             var root = doc.RootElement;
             switch (root.GetProperty("t").GetString())
             {
+                case "hello":
+                    Program.Log($"widget {_i} ({Kind}) host.js alive");
+                    break;
                 case "edit":
                     EditMode.Toggle();
                     break;

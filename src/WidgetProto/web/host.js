@@ -1,31 +1,41 @@
 // 宿主注入运行时（AddScriptToExecuteOnDocumentCreated 注入，组件作者零感知）：
 // ① 状态类驱动（dark/mono/editing/bye）② 编辑态减号徽章 ③ 右键=编辑模式 ④ 拖拽摆位上报。
 // 注入前宿主会先注入 window.__mwInit = {dark,mono,editing} 快照，导航完成后再补推一次兜住竞态。
+// ⚠️ document-created 时机 documentElement 可能尚未存在——一切 DOM 访问都要懒取+兜底，
+//    任何顶层异常都会杀死整个运行时（含拖拽），所以 try 包住非关键段。
 (function () {
   if (window.__mwHost) return; window.__mwHost = true;
-  const H = document.documentElement;
 
+  const post = m => { try { window.chrome?.webview?.postMessage(m); } catch { } };
+
+  let pending = null;
   function apply(s) {
+    const H = document.documentElement;
+    if (!H) { pending = Object.assign(pending || {}, s); return; }
     if ('dark' in s) H.classList.toggle('dark', !!s.dark);
     if ('mono' in s) H.classList.toggle('mono', !!s.mono);
     if ('editing' in s) H.classList.toggle('editing', !!s.editing);
+    if ('bye' in s) H.classList.add('bye');
   }
-  apply(window.__mwInit || {});
+  try { apply(window.__mwInit || {}); } catch { }
 
-  window.chrome?.webview?.addEventListener('message', e => {
-    const m = e.data || {};
-    if (m.t === 'state') apply(m);
-    else if (m.t === 'bye') H.classList.add('bye');
-  });
+  try {
+    window.chrome?.webview?.addEventListener('message', e => {
+      const m = e.data || {};
+      if (m.t === 'state') apply(m);
+      else if (m.t === 'bye') apply({ bye: 1 });
+    });
+  } catch { }
 
-  const post = m => window.chrome?.webview?.postMessage(m);
-
-  // 减号徽章（样式在 widget.css，仅编辑态可见/可点）
   addEventListener('DOMContentLoaded', () => {
-    const b = document.createElement('div');
-    b.className = 'mw-badge';
-    b.addEventListener('click', () => post({ t: 'remove' }));
-    document.body.appendChild(b);
+    try {
+      if (pending) { const p = pending; pending = null; apply(p); }
+      // 减号徽章（样式在 widget.css，仅编辑态可见/可点）
+      const b = document.createElement('div');
+      b.className = 'mw-badge';
+      b.addEventListener('click', () => post({ t: 'remove' }));
+      document.body.appendChild(b);
+    } catch { }
   });
 
   // 右键 = 编辑模式开关（macOS 为菜单项 Edit Widgets…，MVP 直达）
@@ -49,4 +59,6 @@
   };
   addEventListener('pointerup', end, true);
   addEventListener('pointercancel', end, true);
+
+  post({ t: 'hello' });   // 注入存活探针（宿主记日志，排"运行时整体哑火"类故障）
 })();

@@ -24,6 +24,9 @@ public static class Native
 
     // ---- Automatic 着色状态机 / 面板拖出 所需 ----
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("user32.dll")]

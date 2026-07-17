@@ -45,8 +45,17 @@ public sealed class PanelWindow : Window
         Loaded += OnLoaded;
         Closed += (_, _) => Existing = null;
         // macOS 语义：点 Done 或点桌面退出编辑模式（点桌面/切走 = 面板失活；拖出进行中除外——
-        // 拖出全程鼠标不点别处，不会触发失活）
-        Deactivated += (_, _) => { if (EditMode.On && _pick == null && IsVisible) EditMode.Exit(); };
+        // 拖出全程鼠标不点别处，不会触发失活）。
+        // ⚠️点组件（徽章/拖拽）时 WebView2 子窗会抢激活——同进程内的焦点腾挪不算"离开"，
+        // 否则徽章在 pointerup 前就被 editing=false 藏掉，click 永远不成立（真机踩过）。
+        Deactivated += (_, _) =>
+        {
+            if (!EditMode.On || _pick != null || !IsVisible) return;
+            var fg = Native.GetForegroundWindow();
+            Native.GetWindowThreadProcessId(fg, out uint pid);
+            if (pid == (uint)Environment.ProcessId) return;
+            EditMode.Exit();
+        };
     }
 
     async void OnLoaded(object? s, RoutedEventArgs e)
