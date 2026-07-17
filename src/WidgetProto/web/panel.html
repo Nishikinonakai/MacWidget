@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  /* 组件库面板（refs 03 复刻，MVP：搜索 + 全部组件网格 + 拖出放置 + 完成）
+   * 窗口=最终矩形，内容自身 translateY 滑入滑出；材质=自带 alpha 的浅/深底
+   * （不依赖系统透明特效，开关观感一致——回退形态是一等公民）。 */
+  :root {
+    --bg: rgba(242,240,244,.965); --fg: #1d1d1f; --fg2: #6E6E73;
+    --inset-bg: rgba(0,0,0,.055); --sel: rgba(0,0,0,.08); --hair: rgba(0,0,0,.08);
+    --done-bg: #48555A; --done-fg: #fff;
+  }
+  html.dark {
+    --bg: rgba(40,40,45,.97); --fg: #f2f2f5; --fg2: rgba(255,255,255,.6);
+    --inset-bg: rgba(255,255,255,.08); --sel: rgba(255,255,255,.12); --hair: rgba(255,255,255,.09);
+    --done-bg: #5A6A70;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { background: transparent; width:100%; height:100%; overflow:hidden;
+    font-family: "Segoe UI Variable Display","Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif;
+    -webkit-user-select:none; user-select:none; color: var(--fg); }
+  .panel {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    background: var(--bg); border-radius: 16px 16px 0 0;
+    box-shadow: 0 -6px 32px rgba(0,0,0,.28), inset 0 .5px 0 rgba(255,255,255,.35);
+    transform: translateY(104%);
+    transition: transform .3s cubic-bezier(.2,.8,.25,1);
+  }
+  html.show .panel { transform: translateY(0); }
+
+  .main { flex:1; display:flex; min-height:0; }
+  aside { flex:0 0 224px; padding:14px 12px; border-right:.5px solid var(--hair);
+          display:flex; flex-direction:column; gap:10px; }
+  .search { display:flex; align-items:center; gap:6px; background:var(--inset-bg);
+            border-radius:8px; padding:6px 9px; }
+  .search svg { flex:0 0 auto; opacity:.45; }
+  .search input { flex:1; min-width:0; border:0; outline:0; background:transparent;
+                  font:inherit; font-size:13px; color:var(--fg); }
+  .search input::placeholder { color:var(--fg2); }
+  .navitem { display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:8px;
+             font-size:13px; font-weight:600; background:var(--sel); }
+  .navitem svg { opacity:.8 }
+
+  section { flex:1; overflow-y:auto; padding:16px 22px 10px; }
+  section::-webkit-scrollbar { width:8px } section::-webkit-scrollbar-thumb { background:var(--inset-bg); border-radius:4px }
+  h4 { font-size:12.5px; font-weight:600; color:var(--fg2); margin-bottom:14px; }
+  .grid { display:flex; flex-wrap:wrap; gap:26px 30px; align-items:flex-start; }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:grab; }
+  .cell.hide { display:none; }
+  .prev { position:relative; border-radius:17px;
+          transition: transform .15s ease; }
+  .cell:hover .prev { transform: scale(1.03); }
+  .cell:active { cursor:grabbing; }
+  .prev iframe { border:0; background:transparent; transform-origin:0 0; pointer-events:none; display:block; }
+  .cell .name { font-size:12px; color:var(--fg2); }
+
+  footer { flex:0 0 52px; display:flex; align-items:center; gap:16px;
+           padding:0 18px; border-top:.5px solid var(--hair); }
+  footer .hint { flex:1; font-size:13px; color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #done { border:0; outline:0; cursor:pointer; font:inherit; font-size:13px; font-weight:600;
+          color:var(--done-fg); background:var(--done-bg); border-radius:8px; padding:7px 22px; }
+  #done:hover { filter:brightness(1.08); }
+  #done:active { filter:brightness(.92); }
+</style></head><body>
+<div class="panel">
+  <div class="main">
+    <aside>
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 13 13"><circle cx="5.5" cy="5.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="9" y1="9" x2="12.2" y2="12.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="q" type="text" placeholder="搜索组件" autocomplete="off">
+      </div>
+      <div class="navitem">
+        <svg width="15" height="15" viewBox="0 0 15 15"><rect x="1" y="1" width="5.6" height="5.6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.4" y="1" width="5.6" height="5.6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="8.4" width="5.6" height="5.6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.4" y="8.4" width="5.6" height="5.6" rx="2.8" fill="currentColor"/></svg>
+        全部组件
+      </div>
+    </aside>
+    <section>
+      <h4>全部组件</h4>
+      <div class="grid" id="grid"></div>
+    </section>
+  </div>
+  <footer>
+    <div class="hint">将组件拖到桌面上的任意位置来放置…</div>
+    <button id="done">完成</button>
+  </footer>
+</div>
+<script>
+  const WIDGETS = [
+    { kind:'clock',    name:'时钟',     w:180, h:180 },
+    { kind:'calendar', name:'日历',     w:180, h:180 },
+    { kind:'monitor',  name:'系统监视', w:180, h:180 },
+    { kind:'weather',  name:'天气',     w:360, h:180 },
+    { kind:'photo',    name:'照片',     w:360, h:360 },
+  ];
+  const SCALE = .78;
+  const grid = document.getElementById('grid');
+  grid.innerHTML = WIDGETS.map(w => `
+    <div class="cell" data-kind="${w.kind}" data-name="${w.name} ${w.kind}">
+      <div class="prev" style="width:${w.w*SCALE}px;height:${w.h*SCALE}px">
+        <iframe src="${w.kind}.html" width="${w.w}" height="${w.h}" style="transform:scale(${SCALE})"></iframe>
+      </div>
+      <div class="name">${w.name}</div>
+    </div>`).join('');
+
+  const post = m => window.chrome?.webview?.postMessage(m);
+
+  // 预览 iframe 跟随深浅外观（同源可直改；mono 不进预览——macOS 预览恒全彩）
+  function tintFrames() {
+    const dark = document.documentElement.classList.contains('dark');
+    document.querySelectorAll('iframe').forEach(f => {
+      try { f.contentDocument?.documentElement?.classList.toggle('dark', dark); } catch {}
+    });
+  }
+  document.querySelectorAll('iframe').forEach(f => f.addEventListener('load', tintFrames));
+
+  window.chrome?.webview?.addEventListener('message', e => {
+    const m = e.data || {};
+    if (m.t === 'state') { document.documentElement.classList.toggle('dark', !!m.dark); tintFrames(); }
+    else if (m.t === 'show') { requestAnimationFrame(() => document.documentElement.classList.add('show')); document.getElementById('q').focus(); }
+    else if (m.t === 'hide') { document.documentElement.classList.remove('show'); }
+  });
+
+  // 搜索过滤
+  document.getElementById('q').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('.cell').forEach(c =>
+      c.classList.toggle('hide', !!q && !c.dataset.name.toLowerCase().includes(q)));
+  });
+
+  // 拖出放置：位移 >6px 即交棒宿主（宿主用真实光标循环接管，网页端不再跟踪）
+  let pick = null, px = 0, py = 0;
+  grid.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const cell = e.target.closest('.cell');
+    if (!cell) return;
+    pick = cell.dataset.kind; px = e.screenX; py = e.screenY;
+  });
+  addEventListener('pointermove', e => {
+    if (!pick) return;
+    if (Math.hypot(e.screenX - px, e.screenY - py) > 6) { post({ t:'pickup', kind: pick }); pick = null; }
+  });
+  addEventListener('pointerup', () => pick = null);
+
+  document.getElementById('done').addEventListener('click', () => post({ t:'done' }));
+  addEventListener('keydown', e => { if (e.key === 'Escape') post({ t:'done' }); });
+  addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body></html>

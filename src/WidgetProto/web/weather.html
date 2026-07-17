@@ -1,39 +1,36 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { background:transparent; width:100%; height:100%; overflow:hidden;
-    font-family:"SF Pro Display","Segoe UI Variable Display","Segoe UI",sans-serif;
-    -webkit-user-select:none; user-select:none; }
-  .card { width:100%; height:100%; border-radius:16px; padding:14px 20px;
-    display:flex; flex-direction:column; justify-content:space-between;
-    background:linear-gradient(160deg, rgba(40,90,180,.38), rgba(20,40,90,.30));
-    border:1px solid rgba(255,255,255,.12); box-shadow:inset 0 1px 0 rgba(255,255,255,.15);
-    color:#fff; }
-  .top { display:flex; justify-content:space-between; align-items:flex-start; }
-  .city { font-size:15px; font-weight:600; }
-  .temp { font-size:40px; font-weight:500; line-height:1; }
-  .cond { font-size:13px; opacity:.85; margin-top:2px; }
-  .sun { font-size:34px; animation:float 5s ease-in-out infinite; }
-  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
-  .row { display:flex; gap:18px; }
-  .hour { display:flex; flex-direction:column; align-items:center; font-size:12px; gap:2px; opacity:.9; }
-  .hour b { font-weight:600; font-size:13px; }
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  /* 天气 · Medium（360×180 帧 / 344×164 卡）：自绘气象渐变底（深浅外观不变，mono 渐隐入统一材质） */
+  .card { --own-bg: linear-gradient(165deg, #4A7BB5 0%, #38598F 55%, #2C4470 100%); }
+  .content { padding: 14px 18px 13px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .city { font-size: 15px; font-weight: 600; }
+  .temp { font-size: 40px; font-weight: 500; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .cond { font-size: 12px; opacity: .88; margin-top: 2px; }
+  .glyph { font-size: 30px; line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,.2)); }
+  .row { display: flex; justify-content: space-between; }
+  .hour { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; opacity: .92; }
+  .hour em { font-style: normal; font-size: 15px; }
+  .hour b { font-weight: 600; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 </style></head><body>
-<div class="card">
+<div class="card"><div class="content">
   <div class="top">
     <div>
-      <div class="city">北京市</div>
-      <div class="temp">32°</div>
-      <div class="cond">晴 最高 34° 最低 24°</div>
+      <div class="city">杭州市 ◃</div>
+      <div class="temp">35°</div>
+      <div class="cond">晴 最高 37° 最低 28°</div>
     </div>
-    <div class="sun">☀️</div>
+    <div class="glyph">☀️</div>
   </div>
   <div class="row">
-    <div class="hour"><span>现在</span>🌞<b>32°</b></div>
-    <div class="hour"><span>15时</span>🌤️<b>33°</b></div>
-    <div class="hour"><span>16时</span>🌤️<b>33°</b></div>
-    <div class="hour"><span>17时</span>⛅<b>31°</b></div>
-    <div class="hour"><span>18时</span>🌇<b>29°</b></div>
+    <div class="hour"><span>现在</span><em>🌞</em><b>35°</b></div>
+    <div class="hour"><span>19时</span><em>🌤️</em><b>33°</b></div>
+    <div class="hour"><span>20时</span><em>⛅</em><b>31°</b></div>
+    <div class="hour"><span>21时</span><em>☁️</em><b>30°</b></div>
+    <div class="hour"><span>22时</span><em>☁️</em><b>30°</b></div>
+    <div class="hour"><span>23时</span><em>🌙</em><b>29°</b></div>
   </div>
-</div>
+</div></div>
 </body></html>

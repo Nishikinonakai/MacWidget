@@ -21,12 +21,82 @@ public static class Native
 
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    // ---- Automatic 着色状态机 / 面板拖出 所需 ----
+
+    public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hwnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
+    public static extern int GetWindowTextLength(IntPtr hwnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hwnd, char[] buf, int max);
+
+    public const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT p);
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vk);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+
+    [DllImport("kernel32.dll")]
+    public static extern bool CloseHandle(IntPtr h);
+
+    [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", CharSet = CharSet.Unicode)]
+    public static extern bool QueryFullProcessImageName(IntPtr h, uint flags, char[] buf, ref int size);
+
+    public static string ProcessImageName(uint pid)
+    {
+        var h = OpenProcess(0x1000 /*PROCESS_QUERY_LIMITED_INFORMATION*/, false, pid);
+        if (h == IntPtr.Zero) return "";
+        try
+        {
+            var buf = new char[512]; int len = buf.Length;
+            return QueryFullProcessImageName(h, 0, buf, ref len) ? new string(buf, 0, len) : "";
+        }
+        finally { CloseHandle(h); }
+    }
 }
 
 public static class Dwm
 {
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    [DllImport("dwmapi.dll")]
+    static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
+
+    /// <summary>UWP/云挂起窗口 IsWindowVisible 仍为 true，但 DWM 侧被斗篷遮蔽——判"真窗口"必须过这道。</summary>
+    public static bool IsCloaked(IntPtr hwnd)
+        => DwmGetWindowAttribute(hwnd, 14 /*DWMWA_CLOAKED*/, out int v, 4) == 0 && v != 0;
 
     [StructLayout(LayoutKind.Sequential)]
     struct MARGINS { public int Left, Right, Top, Bottom; }

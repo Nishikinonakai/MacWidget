@@ -11,7 +11,7 @@ namespace WidgetProto;
 /// </summary>
 public static class Placement
 {
-    public const double Unit = 170;        // Small 单元 = 帧尺寸（缝隙烙在帧内衬里，组内零间隙）
+    public const double Unit = 180;        // Small 单元 = 帧尺寸（macOS 实测 180pt；缝隙烙在帧内衬 8 里，组内零间隙）
     public const double EdgeMargin = 16;   // 屏幕安全边
     public const double JoinGap = 20;      // 邻近判定净距（粗筛：找锚组件）
     public const double SnapDist = 26;     // 真吸附门槛：最近格位距生手位置 ≤ 此值才吸（机主反馈修正：

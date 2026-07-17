@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  /* 日历 · Small：红色星期 + 大日期数字 + 两条日程（macOS Calendar small 形态） */
+  :root { --tint: #FF453A; }
+  .content { padding: 15px 16px; display: flex; flex-direction: column; }
+  .dow { font-size: 12px; font-weight: 700; color: var(--tint); letter-spacing: .8px; }
+  .day { font-size: 38px; line-height: 1.12; }
+  .evts { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
+  .evt { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .dot { flex: 0 0 auto; width: 4px; height: 26px; border-radius: 2px; }
+  .evt .t { font-size: 11.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .evt .s { font-size: 10.5px; color: var(--fg2); }
+</style></head><body>
+<div class="card"><div class="content">
+  <div class="dow" id="dow">FRIDAY</div>
+  <div class="day w-big" id="day">17</div>
+  <div class="evts">
+    <div class="evt"><span class="dot" style="background:#0A84FF"></span><span><div class="t">产品评审</div><div class="s">14:00–15:00</div></span></div>
+    <div class="evt"><span class="dot" style="background:#30D158"></span><span><div class="t">健身</div><div class="s">19:30</div></span></div>
+  </div>
+</div></div>
+<script>
+  const n = new Date();
+  document.getElementById('dow').textContent =
+    ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][n.getDay()];
+  document.getElementById('day').textContent = n.getDate();
+</script>
+</body></html>

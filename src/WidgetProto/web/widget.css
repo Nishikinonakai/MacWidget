@@ -1,0 +1,90 @@
+/* MacWidget 共享卡面体系（设计规格 research/macos-widget-design-spec.md）
+ * 帧=窗口（Small 180 / Medium 360×180 / Large 360×360），卡=帧内衬 8、圆角 20、CSS 阴影。
+ * 四态：全彩·浅（#FFF 不透明）/ 全彩·深（#2E2E2E 不透明）/ mono（rgba(95,93,99,.92) 自带 8% 渗色，
+ * 不依赖系统透明特效，开关皆同观感）/ 编辑态（减号徽章）。
+ * 宿主通过 <html> 上的类驱动：.dark .mono .editing .bye —— 组件页零逻辑。 */
+
+:root {
+  --inset: 8px;
+  --radius: 20px;
+  --card-bg: #ffffff;
+  --fg: #1d1d1f;
+  --fg2: #6E6E73;
+  --tint: #FF9F0A;              /* 组件自定品牌色；mono 态被统一刷白 */
+  --hairline: rgba(0,0,0,.06);
+  --shadow: 0 2px 8px rgba(0,0,0,.28);
+}
+html.dark {
+  --card-bg: #2E2E2E;
+  --fg: #ffffff;
+  --fg2: rgba(255,255,255,.65);
+  --hairline: rgba(255,255,255,.09);
+}
+html.mono {
+  --fg: #ffffff;
+  --fg2: rgba(255,255,255,.62);
+  --tint: #ffffff;              /* 彩色文字/曲线 → 白（实测语义） */
+  --hairline: rgba(255,255,255,.12);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  background: transparent;
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: "Segoe UI Variable Display","Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif;
+  -webkit-user-select: none; user-select: none;
+  cursor: default;
+}
+
+.card {
+  position: absolute; inset: var(--inset);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transform-origin: 50% 50%;
+  transition: background-color .3s ease, transform .18s cubic-bezier(.4,0,1,1), opacity .18s ease;
+}
+/* 自绘底色层（天气渐变等）：组件设 --own-bg；mono 态渐隐露出统一材质 */
+.card::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--own-bg, none);
+  opacity: 1; transition: opacity .3s ease;
+}
+html.mono .card { background: rgba(95,93,99,.92); }
+html.mono .card::before { opacity: 0; }
+
+/* 内容整体去饱和（mono 实测：彩图标→白描边、彩曲线→灰） */
+.content {
+  position: absolute; inset: 0;
+  filter: saturate(1) brightness(1);
+  transition: filter .3s ease;
+}
+html.mono .content { filter: saturate(0) brightness(1.15); }
+
+/* 移除动画（宿主发 bye 后收窗） */
+html.bye .card { transform: scale(.05); opacity: 0; }
+
+/* 编辑态减号徽章（host.js 注入）：浅磨砂圆 ~20pt 压帧角 */
+.mw-badge {
+  position: absolute; left: 1px; top: 1px; width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(235,235,240,.94);
+  box-shadow: 0 1px 4px rgba(0,0,0,.35), inset 0 0 0 .5px rgba(0,0,0,.06);
+  opacity: 0; transform: scale(.4); pointer-events: none;
+  transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1.2);
+  z-index: 9;
+}
+.mw-badge::before {
+  content: ""; position: absolute; left: 5px; top: 10px; width: 12px; height: 2.4px;
+  border-radius: 1.2px; background: #48484d;
+}
+.mw-badge:hover { background: rgba(244,244,248,1); }
+.mw-badge:active { transform: scale(.92); }
+html.editing .mw-badge { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+/* 常用排版原子（组件页自取） */
+.w-title { font-size: 13px; font-weight: 600; color: var(--tint); letter-spacing: .2px; }
+.w-big   { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.w-body  { font-size: 15px; color: var(--fg2); }
+.w-cap   { font-size: 11px; font-weight: 500; color: var(--fg2); }

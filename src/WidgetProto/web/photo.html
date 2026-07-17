@@ -1,24 +1,32 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { background:transparent; width:100%; height:100%; overflow:hidden;
-    font-family:"SF Pro Display","Segoe UI Variable Display","Segoe UI",sans-serif;
-    -webkit-user-select:none; user-select:none; }
-  .card { width:100%; height:100%; border-radius:16px; overflow:hidden; position:relative;
-    border:1px solid rgba(255,255,255,.12); }
-  .img { position:absolute; inset:-10%;
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  /* 照片 · Large（360×360 帧 / 344×344 卡）：全出血图 + 左下角标（mono 下 saturate(0) 自动成黑白照） */
+  .img { position: absolute; inset: -8%;
     background:
-      radial-gradient(ellipse 65% 50% at 30% 70%, #ff8c66 0%, transparent 60%),
-      radial-gradient(ellipse 70% 60% at 75% 25%, #7a5cff 0%, transparent 65%),
-      radial-gradient(ellipse 90% 70% at 60% 80%, #1d3557 0%, #0a1128 100%);
-    animation:kenburns 24s ease-in-out infinite alternate; }
-  @keyframes kenburns { from{transform:scale(1) translate(0,0)} to{transform:scale(1.12) translate(2%,-2%)} }
-  .cap { position:absolute; left:16px; bottom:12px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.5); }
-  .cap b { font-size:15px; font-weight:600; display:block; }
-  .cap span { font-size:12px; opacity:.85; }
+      radial-gradient(ellipse 60% 42% at 28% 74%, #FF9166 0%, transparent 62%),
+      radial-gradient(ellipse 66% 55% at 76% 22%, #8A6CFF 0%, transparent 64%),
+      radial-gradient(ellipse 120% 46% at 50% 102%, #17325C 0%, transparent 70%),
+      linear-gradient(180deg, #0E1B38 0%, #23386B 52%, #0A1128 100%);
+    animation: kenburns 26s ease-in-out infinite alternate; }
+  @keyframes kenburns { from { transform: scale(1) } to { transform: scale(1.1) translate(1.6%, -1.6%) } }
+  .stars { position: absolute; inset: 0; }
+  .stars i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: rgba(255,255,255,.85); }
+  .cap { position: absolute; left: 16px; bottom: 13px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
+  .cap b { font-size: 15px; font-weight: 600; display: block; }
+  .cap span { font-size: 12px; opacity: .85; }
 </style></head><body>
-<div class="card">
+<div class="card"><div class="content">
   <div class="img"></div>
-  <div class="cap"><b>回忆</b><span>2026年7月13日</span></div>
-</div>
+  <div class="stars" id="st"></div>
+  <div class="cap"><b>回忆</b><span>2026年7月13日 · 杭州</span></div>
+</div></div>
+<script>
+  const st = document.getElementById('st');
+  let h = '';
+  for (let i = 0; i < 26; i++)
+    h += `<i style="left:${(Math.random()*94+3).toFixed(1)}%;top:${(Math.random()*46+3).toFixed(1)}%;opacity:${(Math.random()*.6+.25).toFixed(2)}"></i>`;
+  st.innerHTML = h;
+</script>
 </body></html>
