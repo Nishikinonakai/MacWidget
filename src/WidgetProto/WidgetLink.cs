@@ -20,10 +20,10 @@ public static class WidgetLink
     static bool _pumping;
     static readonly object _lk = new();
 
-    /// <summary>UI 线程调用。默认 ~15Hz 节流；force 用于落定/关闭等必达时刻。</summary>
+    /// <summary>UI 线程调用。默认 ~30Hz 节流；force 用于落定/关闭等必达时刻。</summary>
     public static void Send(bool force = false)
     {
-        if (!force && (DateTime.Now - _lastSend).TotalMilliseconds < 66) return;
+        if (!force && (DateTime.Now - _lastSend).TotalMilliseconds < 33) return;
         _lastSend = DateTime.Now;
 
         var rects = new List<double[]>();
