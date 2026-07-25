@@ -65,6 +65,9 @@ public static class Program
 
                 ColorMode.Start();   // Automatic 着色状态机（含深浅外观跟随）
                 Tray.Install();      // 托盘：编辑/退出入口
+                MacDeskCommands.Start();
+                if (Opts.EditOnStartup)
+                    Application.Current.Dispatcher.BeginInvoke(EditMode.Enter);
 
                 // MacDesk 联动：初始占用矩形（等一拍让窗口全部落位）+ 3s 心跳
                 // （心跳兜住 MacDesk 重启后的重连——管道断开时对方已清空，重连即恢复避让）

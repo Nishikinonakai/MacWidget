@@ -14,6 +14,7 @@ public sealed class Options
     public bool NoActivate = true;
     public bool ProcPerSite = true;     // 内存实验定案：--process-per-site 是胜负手，默认开
     public bool LabMode;                // --n/--widget 显式给出 = 实验模式（栅格铺开、不读写持久化布局）
+    public bool EditOnStartup;          // MacDesk 从未运行的已安装副本拉起时，直接进入组件库
 
     public static Options Parse(string[] args)
     {
@@ -35,6 +36,7 @@ public sealed class Options
                 case "--activate": o.NoActivate = false; break;
                 case "--procpersite": o.ProcPerSite = true; break;
                 case "--no-procpersite": o.ProcPerSite = false; break;
+                case "--edit-widgets": o.EditOnStartup = true; break;
             }
         }
         if (o.N < 1) o.N = 1;
