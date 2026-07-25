@@ -33,7 +33,7 @@ Utilities / Software / Customization / Desktop Enhancement / 桌面美化
 - WebView2 Runtime（Win11 自带；安装器带 Evergreen Bootstrapper 兜底）
 - 内存建议 8GB+；常驻占用视组件数 300–600MB
 
-## 截图清单（上架前在中性壁纸下补拍 1920×1080）
+## 截图清单（上架前在中性壁纸下补拍至少 1920×1080、16:9）
 
 1. 全家福：七组件铺开（明亮 + 深色各一）
 2. 编辑模式 + 组件库面板拖出瞬间
