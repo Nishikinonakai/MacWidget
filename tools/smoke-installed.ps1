@@ -7,6 +7,7 @@ param(
     [int]$ReadyTimeoutSeconds = 20,
     [switch]$StartIfNeeded,
     [switch]$RequireMacDeskLink,
+    [switch]$RequireMultipleDisplays,
     [switch]$ExerciseRestart,
     [string]$ExpectedVersion,
     [switch]$SkipNetwork
@@ -91,6 +92,8 @@ if (-not (Test-Path -LiteralPath $logPath -PathType Leaf)) {
 $webViewReady = $false
 $trayReady = $false
 $macDeskLinked = $false
+$topology = $null
+$topologyDisplayCount = 0
 $currentStartupLog = @()
 $startupIndexes = @()
 $logDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
@@ -107,6 +110,13 @@ do {
         $webViewReady = @($currentStartupLog | Where-Object { $_ -like '*webview2 env ready*' }).Count -gt 0
         $trayReady = @($currentStartupLog | Where-Object { $_ -like '*tray ready*' }).Count -gt 0
         $macDeskLinked = @($currentStartupLog | Where-Object { $_ -like '*widgetlink connected to MacDesk*' }).Count -gt 0
+        $topologyLine = @($currentStartupLog | Where-Object { $_ -like '*display topology stable:*' } | Select-Object -Last 1)
+        if ($topologyLine.Count -gt 0) {
+            $topology = ($topologyLine[0] -replace '^.*display topology stable:\s*', '').Trim()
+            if ($topology) {
+                $topologyDisplayCount = @($topology -split '\|' | Where-Object { $_.Trim().Length -gt 0 }).Count
+            }
+        }
     }
     $ready = $webViewReady -and $trayReady -and ((-not $RequireMacDeskLink) -or $macDeskLinked)
     if (-not $ready -and (Get-Date) -lt $logDeadline) { Start-Sleep -Milliseconds 250 }
@@ -118,6 +128,10 @@ if (-not $webViewReady) { throw 'The startup log has no WebView2-ready signal.' 
 if (-not $trayReady) { throw 'The startup log has no tray-ready signal.' }
 if ($RequireMacDeskLink -and -not $macDeskLinked) {
     throw 'MacDesk link was required, but the startup log has no successful pipe connection signal.'
+}
+if ($RequireMultipleDisplays -and $topologyDisplayCount -lt 2) {
+    $observedTopology = if ($topology) { $topology } else { 'no stable topology entry was written to the startup log' }
+    throw "At least two active displays were required, but MacWidget observed $topologyDisplayCount. Topology: $observedTopology"
 }
 
 $weatherStatus = 'skipped'
@@ -150,6 +164,8 @@ if (-not $SkipNetwork) {
     WebView2Ready      = $webViewReady
     TrayReady          = $trayReady
     MacDeskLinked      = $macDeskLinked
+    Topology           = $topology
+    TopologyDisplayCount = $topologyDisplayCount
     StartupLogEntries  = $currentStartupLog.Count
     WeatherHttpStatus  = $weatherStatus
     WeatherBytes       = $weatherBytes

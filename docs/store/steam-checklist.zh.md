@@ -38,6 +38,8 @@
 2. 正式多尺寸应用图标（EXE / 开始菜单 / 托盘统一）；托盘保留稳定的 NotifyIcon 挂钩，
    点击后为原生 WPF 浮层，含编辑组件、自启开关和退出。
 3. 多屏持久化（按 EDID+分辨率分桶）、显示器变化后的安全交接；仍需有第二块物理屏时补一次实机走查。
+   届时先运行 `tools\smoke-installed.ps1 -StartIfNeeded -RequireMacDeskLink -RequireMultipleDisplays`，保存其
+   输出的 `Topology`；随后实际拔插或重新排列显示器，确认日志出现 topology restart 且各组件仍恢复到可见屏幕。
 4. 完整遮挡时暂停 WebView2 与数据采样、重新可见或编辑时立即恢复。
 5. 组件库分类栏、搜索与 Suggestions；推荐项优先展示尚未摆到桌面的组件。
 6. 明亮与深色主题下的组件、托盘浮层真机视觉走查。

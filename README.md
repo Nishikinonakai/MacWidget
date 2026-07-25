@@ -69,5 +69,24 @@ MacDesk 与 MacWidget 可以独立安装。两者都在运行时，MacWidget 会
 - [RESULTS.md](RESULTS.md) — 早期技术验证结果。
 - [docs/store/](docs/store/) — 商店文案、定价和发布清单。
 
+## 已安装版验收
+
+从源码仓库运行以下脚本，可验证正式安装目录、内置 .NET 运行时、WebView2、托盘和可选的 MacDesk
+管道；`-ExerciseRestart` 还会验证单实例安全重启。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\smoke-installed.ps1 `
+  -StartIfNeeded -RequireMacDeskLink -ExerciseRestart
+```
+
+接入第二块显示器后，再运行 `-RequireMultipleDisplays`。脚本会读取该次启动由 MacWidget 自身记录的稳定
+显示拓扑，要求至少有两个活动显示器，并在结果中输出完整拓扑；这验证多屏启动条件，不替代拔插/重新排列
+显示器时的人工安全交接走查。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\smoke-installed.ps1 `
+  -StartIfNeeded -RequireMacDeskLink -RequireMultipleDisplays
+```
+
 开发/实验命令行参数仍保留在 `Options.cs`，不建议普通用户使用；MacDesk 拉起组件库使用
 `MacWidget.exe --edit-widgets`。
