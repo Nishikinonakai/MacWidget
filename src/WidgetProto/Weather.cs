@@ -23,7 +23,7 @@ public sealed class WeatherProvider : IParamProvider
         var h = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
         // MET 要求可识别 UA（应用名 + 联系途径）
         h.DefaultRequestHeaders.UserAgent.ParseAdd("MacWidget/0.2");
-        h.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/Nishikinonakai/MacDesk)");
+        h.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/Nishikinonakai/MacWidget)");
         return h;
     }
 
