@@ -10,6 +10,7 @@ namespace WidgetProto;
 public static class Tray
 {
     static System.Windows.Forms.NotifyIcon? _icon;
+    static bool _runtimeUpdateNoticePending;
 
     public static void Install()
     {
@@ -25,6 +26,7 @@ public static class Tray
                 Application.Current.Dispatcher.BeginInvoke(TrayPopupWindow.Toggle);
         };
         Program.Log("tray ready");
+        if (_runtimeUpdateNoticePending) ShowRuntimeUpdateNotice();
     }
 
     public static void Uninstall()
@@ -46,7 +48,13 @@ public static class Tray
             {
                 try
                 {
-                    _icon?.ShowBalloonTip(8000, "MacWidget 可重启更新",
+                    if (_icon == null)
+                    {
+                        _runtimeUpdateNoticePending = true;
+                        return;
+                    }
+                    _runtimeUpdateNoticePending = false;
+                    _icon.ShowBalloonTip(8000, "MacWidget 可重启更新",
                         "WebView2 Runtime 已更新。打开托盘浮层并选择“重新启动 MacWidget”以应用安全更新。",
                         System.Windows.Forms.ToolTipIcon.Info);
                 }
