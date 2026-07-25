@@ -6,12 +6,16 @@
 
 ## 🧍 只有机主能做（有力气再做，一次搞定）
 
-1. **Steamworks 合作伙伴注册** — partner.steamgames.com
+1. **公开产品名决策** — 当前技术名称 `MacWidget` 不可直接用于商店。公开初筛发现 App Store 已有同名同类的
+   [MacWidget - Desktop Widgets](https://apps.apple.com/us/app/macwidget-desktop-widgets/id6747938136?mt=12)；这不是法律
+   结论，但在名称/商标正式确认前，不能制作标题字标、上传 capsule 或创建公开 Steam 页面。选定替代名后我会
+   统一更新商店文案、安装器、应用标识和素材。
+2. **Steamworks 合作伙伴注册** — partner.steamgames.com
    - 个人（Sole Proprietorship）可注册；$100 应用押金（游戏收入 $1,000 后返还）
    - 需要：身份证件、银行收款信息（USD SWIFT 打个人卡可行，先例：MyDockFinder）
    - 税务面谈：W-8BEN，填中国税号（身份证号）→ 美区预扣从 30% 降到 10%
-2. **收款账户确认** — 接收美元入账的银行卡（多数国内银行卡可收 SWIFT，建议提前问一句客服）
-3. 注册完成后把 App ID 给我 → 后续商店页配置、构建上传、定价矩阵我来填
+3. **收款账户确认** — 接收美元入账的银行卡（多数国内银行卡可收 SWIFT，建议提前问一句客服）
+4. 注册完成后把 App ID 给我 → 后续商店页配置、构建上传、定价矩阵我来填
 
 ## 🤖 已备好 / 可代理
 

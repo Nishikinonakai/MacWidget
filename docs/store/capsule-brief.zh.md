@@ -57,12 +57,17 @@ capsule，也不包含产品标识，不应上传到 Steam。
 “Early Access”、平台图标或其他营销文案。Library Hero 不放文字，Library Logo 只放标题字标。所有素材都要
 PG-13，并且产品名称必须在 capsule 中清晰可读。
 
-产品目前暂定名 **MacWidget**。标题字标落稿前需完成名称/商标风险确认；若改名，应同步更新 Store 文案、
-安装器、应用标识和全部素材。标题建议只用 `MacWidget`，不加 “macOS”、Apple 或 Windows 等字样。
+产品目前的技术名称为 **MacWidget**，但**不能按此名称制作公开商店标题或 capsule**。2026-07-26 的公开
+初筛已发现 App Store 上存在同名同类产品 [MacWidget - Desktop Widgets](https://apps.apple.com/us/app/macwidget-desktop-widgets/id6747938136?mt=12)。
+这不是商标注册或法律侵权结论，但已构成显著的用户混淆与商店检索风险；必须由机主确定替代公开产品名后，
+才能制作标题字标、商店图或发起 Steam 上架。
+
+选定替代名后，应同步更新 Store 文案、安装器、应用标识和全部公开素材；仓库名、进程名和现有开发构建可在
+该决定前继续使用内部技术名称。正式标题不要包含 “macOS”、Apple 或 Windows 等字样。
 
 ## 下一次制作清单
 
-1. 机主确认产品名称与该蓝紫玻璃方向。
+1. 机主确定不与现有 Mac 产品混淆的公开产品名称，并确认该蓝紫玻璃方向。
 2. 用真实的标题字标覆盖到主视觉右侧安全留白；先输出 Main Capsule，再同源裁切 Header、Small 和 Vertical。
 3. 从无文字主视觉另出 Library Hero 和透明 Library Logo；不要把标题烘焙进 Hero。
 4. 经机主授权后，临时使用上述中性壁纸，补拍 1920×1080 的七组件、编辑模式、天气/音乐、Automatic
