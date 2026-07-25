@@ -1,0 +1,72 @@
+name: Build MacWidget
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macwidget-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --version=6.7.3 --no-progress --yes
+
+      - name: Restore and publish x64 build
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.ref_type }}' -eq 'tag') {
+            '${{ github.ref_name }}'.TrimStart('v')
+          } else {
+            "0.2.0-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          dotnet restore src/WidgetProto/WidgetProto.csproj
+          dotnet publish src/WidgetProto/WidgetProto.csproj `
+            --configuration Release --runtime win-x64 --no-self-contained --no-restore `
+            --output publish -p:Version=$version -p:InformationalVersion="$version+$env:GITHUB_SHA"
+
+      - name: Validate embedded WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature installer/MicrosoftEdgeWebview2Setup.exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Microsoft Corporation*') {
+            throw "Unexpected WebView2 bootstrapper signature: $($signature.Status) / $($signature.SignerCertificate.Subject)"
+          }
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found: $iscc" }
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" "$env:GITHUB_WORKSPACE\installer\macwidget.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
+
+      - name: Upload private installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacWidget-Setup-${{ steps.version.outputs.version }}
+          path: installer/MacWidget-Setup-v*.exe
+          if-no-files-found: error
+          retention-days: 14
