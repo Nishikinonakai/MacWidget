@@ -30,6 +30,7 @@ public static class Program
             try
             {
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
+                DataHub.Register(new MusicProvider());
 
                 if (Opts.Control != "native")
                 {

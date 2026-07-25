@@ -19,6 +19,12 @@ public interface IDataProvider
     object Fetch();
 }
 
+/// <summary>数据桥反向通道：组件页 mw.send(topic, cmd) → provider（播控等）。UI 线程调用。</summary>
+public interface ICommandSink
+{
+    void Command(string cmd);
+}
+
 public static class DataHub
 {
     sealed class Topic
@@ -49,6 +55,18 @@ public static class DataHub
         // 回放快照（或 loading 占位）——新文档总是先有东西画
         w.PostJson(t.LastEnvelope ?? Env(topic, "loading", stale: false, data: null, error: null));
         EnsureRunning(t);
+    }
+
+    /// <summary>组件命令（UI 线程）。执行后 250ms 快拍一帧让 UI 跟手（给目标应用反应时间）。</summary>
+    public static void Command(string topic, string cmd)
+    {
+        if (cmd.Length == 0 || !_topics.TryGetValue(topic, out var t)) return;
+        if (t.Provider is not ICommandSink sink) return;
+        try { sink.Command(cmd); }
+        catch (Exception ex) { Program.Log($"datahub: {topic} cmd '{cmd}' FAIL: {ex.Message}"); }
+        var once = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        once.Tick += (_, _) => { once.Stop(); Sample(t); };
+        once.Start();
     }
 
     /// <summary>窗口关闭时调用；最后一个订阅者离场即停表。</summary>
@@ -84,7 +102,11 @@ public static class DataHub
         {
             object? data = null; string? err = null;
             try { data = t.Provider.Fetch(); }
-            catch (Exception ex) { err = ex.Message; }
+            catch (Exception ex)
+            {
+                // COM 断连类异常 Message 常为空（真机：杀播放器瞬间的 GSMTC 调用），带上类型名
+                err = ex.Message.Length > 0 ? ex.Message : ex.GetType().Name;
+            }
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 t.Busy = false;

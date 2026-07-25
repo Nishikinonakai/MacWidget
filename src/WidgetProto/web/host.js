@@ -18,6 +18,9 @@
       (subs[topic] || (subs[topic] = [])).push(fn);
       post({ t: 'sub', topic: topic });
     },
+    send(topic, cmd) {   // 反向通道：播控等命令 → 宿主 provider（ICommandSink）
+      post({ t: 'cmd', topic: topic, cmd: cmd });
+    },
   };
 
   let pending = null;

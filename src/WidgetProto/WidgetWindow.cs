@@ -243,6 +243,10 @@ public sealed class WidgetWindow : Window
                     if (root.GetProperty("topic").GetString() is { Length: > 0 } topic)
                         DataHub.Subscribe(this, topic);
                     break;
+                case "cmd":
+                    DataHub.Command(root.GetProperty("topic").GetString() ?? "",
+                                    root.GetProperty("cmd").GetString() ?? "");
+                    break;
                 case "remove":
                     ByeAndClose();
                     break;

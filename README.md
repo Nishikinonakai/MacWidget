@@ -38,7 +38,9 @@ window.mw?.subscribe('sysmon', m => {
 ```
 
 宿主侧数据源实现 `IDataProvider`（见 DataHub.cs），**有订阅者才采样**；
-现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）。将来天气等联网源走同一契约直接插。
+反向通道 `mw.send(topic, cmd)` → provider 的 `ICommandSink`（命令后 250ms 快拍一帧跟手）。
+现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）、`music`（GSMTC 正在播放，1s；
+cmd = playpause/next/prev）。将来天气等联网源走同一契约直接插。
 
 ## 命令行
 

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  /* 正在播放（GSMTC）：浅/深自适应卡（不用 --own-bg，走四态默认路径）。
+     Small：封面满卡 + 底部渐变叠字；Medium（≥300px 视口）：左封面 + 右曲目/进度/播控。 */
+  :root { --tint: #FA586A; }
+
+  .empty { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px;
+           align-items:center; justify-content:center; color:var(--fg2); }
+  .empty svg { opacity:.75; }
+  .empty span { font-size:12px; font-weight:500; }
+  html:not(.nosession) .empty { display:none; }
+  html.nosession .live { display:none !important; }
+
+  /* ---- Small ---- */
+  .s-art { position:absolute; inset:0; }
+  .s-art img { width:100%; height:100%; object-fit:cover; display:block; }
+  .s-shade { position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.62) 0%, rgba(0,0,0,0) 46%); }
+  .s-meta { position:absolute; left:12px; right:12px; bottom:10px; color:#fff; }
+  .s-meta .t { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .s-meta .a { font-size:11px; opacity:.72; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .s-badge { position:absolute; right:10px; top:10px; width:20px; height:20px; border-radius:50%;
+             background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; }
+  .m-wrap { display:none; }
+
+  /* 无封面时的小卡底（品牌渐变 + 音符） */
+  .s-art.noart { background:linear-gradient(135deg, #FA586A 0%, #B33BF6 100%); }
+  .s-art.noart img { display:none; }
+  .s-art.noart::after { content:"♪"; position:absolute; inset:0; display:flex; align-items:center;
+                        justify-content:center; font-size:56px; color:rgba(255,255,255,.85); }
+
+  /* ---- Medium ---- */
+  @media (min-width: 300px) {
+    .s-art, .s-shade, .s-meta, .s-badge { display:none; }
+    .m-wrap { display:flex; position:absolute; inset:0; padding:16px; gap:14px; align-items:center; }
+    .m-art { flex:0 0 116px; width:116px; height:116px; border-radius:10px; overflow:hidden; position:relative;
+             background:linear-gradient(135deg, #FA586A 0%, #B33BF6 100%);
+             box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+    .m-art img { width:100%; height:100%; object-fit:cover; display:block; }
+    .m-art.noart img { display:none; }
+    .m-art.noart::after { content:"♪"; position:absolute; inset:0; display:flex; align-items:center;
+                          justify-content:center; font-size:44px; color:rgba(255,255,255,.85); }
+    .m-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+    .m-col .t { font-size:14.5px; font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .m-col .a { font-size:12px; color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .bar { height:3px; border-radius:1.5px; background:var(--hairline); margin-top:4px; overflow:hidden; }
+    .bar i { display:block; height:100%; width:0; border-radius:1.5px; background:var(--tint); transition:width .5s linear; }
+    .bar.hide { visibility:hidden; }
+    .ctl { display:flex; align-items:center; gap:18px; margin-top:6px; }
+    .btn { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+           cursor:pointer; transition:background .12s ease, transform .08s ease; }
+    .btn:hover { background:var(--hairline); }
+    .btn:active { transform:scale(.9); }
+    .btn svg { fill:var(--fg); }
+  }
+  html.stale .live { opacity:.55; transition:opacity .3s ease; }
+</style></head><body>
+<div class="card">
+  <div class="content">
+    <div class="empty">
+      <svg width="34" height="34" viewBox="0 0 34 34"><path d="M13 26.5V8.8c0-.7.5-1.3 1.2-1.5l10.5-2.6c1-.2 1.9.5 1.9 1.5v16.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="26.5" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="23" cy="22.7" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <span>没有播放内容</span>
+    </div>
+
+    <div class="live s-art noart"><img id="sImg" alt=""></div>
+    <div class="live s-shade"></div>
+    <div class="live s-badge">
+      <svg id="sBadge" width="9" height="9" viewBox="0 0 10 10"><polygon points="1,0 10,5 1,10" fill="#fff"/></svg>
+    </div>
+    <div class="live s-meta">
+      <div class="t" id="sT"></div>
+      <div class="a" id="sA"></div>
+    </div>
+
+    <div class="live m-wrap">
+      <div class="m-art noart"><img id="mImg" alt=""></div>
+      <div class="m-col">
+        <div class="t" id="mT"></div>
+        <div class="a" id="mA"></div>
+        <div class="bar" id="bar"><i id="fill"></i></div>
+        <div class="ctl">
+          <div class="btn" data-cmd="prev"><svg width="17" height="14" viewBox="0 0 17 14"><polygon points="8.5,0 8.5,14 0,7"/><polygon points="17,0 17,14 8.5,7"/></svg></div>
+          <div class="btn" data-cmd="playpause">
+            <svg id="icoPlay" width="15" height="16" viewBox="0 0 13 14"><polygon points="0,0 13,7 0,14"/></svg>
+            <svg id="icoPause" width="13" height="14" viewBox="0 0 12 14" style="display:none"><rect x="0" y="0" width="4.2" height="14" rx="1.2"/><rect x="7.8" y="0" width="4.2" height="14" rx="1.2"/></svg>
+          </div>
+          <div class="btn" data-cmd="next"><svg width="17" height="14" viewBox="0 0 17 14"><polygon points="0,0 8.5,7 0,14"/><polygon points="8.5,0 17,7 8.5,14"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const H = document.documentElement, $ = id => document.getElementById(id);
+  H.classList.add('nosession');   // 首帧骨架 = 无会话占位
+
+  // 播控点击（自带位移守卫：按下后挪 >4px 视作拖拽组件，不发命令）
+  let bx = 0, by = 0;
+  document.querySelectorAll('.btn').forEach(b => {
+    b.addEventListener('pointerdown', e => { bx = e.screenX; by = e.screenY; });
+    b.addEventListener('click', e => {
+      if (Math.hypot(e.screenX - bx, e.screenY - by) > 4) return;
+      window.mw?.send('music', b.dataset.cmd);
+    });
+  });
+
+  function setArt(img, box, art) {
+    if (art) { img.src = art; box.classList.remove('noart'); }
+    else { img.removeAttribute('src'); box.classList.add('noart'); }
+  }
+  window.mw?.subscribe('music', m => {
+    if (m.status === 'loading') return;
+    H.classList.toggle('stale', m.status !== 'ok' || !!m.stale);
+    const d = m.data;
+    if (!d || !d.hasSession) { H.classList.add('nosession'); return; }
+    H.classList.remove('nosession');
+    $('sT').textContent = $('mT').textContent = d.title || '未知曲目';
+    $('sA').textContent = $('mA').textContent = d.artist || d.album || '';
+    setArt($('sImg'), document.querySelector('.s-art'), d.art);
+    setArt($('mImg'), document.querySelector('.m-art'), d.art);
+    $('icoPlay').style.display = d.playing ? 'none' : '';
+    $('icoPause').style.display = d.playing ? '' : 'none';
+    $('sBadge').innerHTML = d.playing
+      ? '<rect x="1" y="1" width="3" height="8" rx="1" fill="#fff"/><rect x="6" y="1" width="3" height="8" rx="1" fill="#fff"/>'
+      : '<polygon points="1,0 10,5 1,10" fill="#fff"/>';
+    const has = d.durSec > 0;
+    $('bar').classList.toggle('hide', !has);
+    if (has) $('fill').style.width = Math.min(100, 100 * d.posSec / d.durSec) + '%';
+  });
+</script>
+</body></html>
