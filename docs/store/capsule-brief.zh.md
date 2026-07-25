@@ -13,6 +13,19 @@ capsule，也不包含产品标识，不应上传到 Steam。
 实际拍摄前须取得机主授权；先记录当前壁纸及其显示方式，再临时应用该文件，完成 4K 截图和所需的
 1920×1080 导出后立即恢复原壁纸并目视确认。不要在未授权或机器正在使用时更改桌面设置。
 
+仓库中的 `tools/stage-store-wallpaper.ps1` 将这个过程做成显式的可恢复会话：不带参数时只报告当前状态；
+`-Apply` 会备份当前有本地文件路径的壁纸后再切换；`-Restore` 会恢复原图与样式并删除备份会话。先把候选
+壁纸复制到测试机的本地路径，再在获授权的交互会话中依次运行：
+
+```powershell
+.\tools\stage-store-wallpaper.ps1
+.\tools\stage-store-wallpaper.ps1 -Apply -WallpaperPath 'C:\work\macwidget-store\macwidget-neutral-wallpaper-v1.png'
+# 拍摄并导出截图
+.\tools\stage-store-wallpaper.ps1 -Restore
+```
+
+若当前壁纸不是可恢复的本地文件，脚本会拒绝自动切换，避免覆盖幻灯片、主题或在线壁纸状态。
+
 ## 已定视觉方向
 
 - 深靛蓝到紫色的夜间桌面氛围；半透明玻璃组件卡片表达时钟、日历、天气、音乐四个核心场景。
