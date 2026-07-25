@@ -81,10 +81,21 @@ jobs:
           & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" "$env:GITHUB_WORKSPACE\installer\macwidget.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
 
+      - name: Write installer SHA-256
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem installer -Filter 'MacWidget-Setup-v*.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected one installer, found $($installers.Count)." }
+          $installer = $installers[0]
+          $hash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($installer.Name)" | Set-Content -LiteralPath "$($installer.FullName).sha256" -NoNewline
+
       - name: Upload private installer artifact
         uses: actions/upload-artifact@v7
         with:
           name: MacWidget-Setup-${{ steps.version.outputs.version }}
-          path: installer/MacWidget-Setup-v*.exe
+          path: |
+            installer/MacWidget-Setup-v*.exe
+            installer/MacWidget-Setup-v*.exe.sha256
           if-no-files-found: error
           retention-days: 14

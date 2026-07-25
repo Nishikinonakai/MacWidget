@@ -21,9 +21,9 @@
   一组 1920×1080 标准图（要动机主桌面壁纸，等机主在场或授权）
 - 胶囊图（capsule）：需要设计稿（616×353 / 231×87 等档），可先出布局稿，最终美术机主过目
 - 构建打包：GitHub Actions 已在 Windows runner 发布 x64、校验微软签名的 WebView2 引导器、用 Inno
-  打出私有 Artifact（保留 14 天），并解析已安装版冒烟脚本、强制其保持 Windows PowerShell 5.1
-  可加载的 ASCII 源码；不会自动创建 GitHub Release。Steam 侧待 App ID 就绪后接入 steamcmd/steampipe
-  脚本。
+  打出私有 Artifact（保留 14 天）。每份 Artifact 含安装器及同名 `.sha256` 文件，供 Beta 手动升级前验证
+  完整性；并解析已安装版冒烟脚本、强制其保持 Windows PowerShell 5.1 可加载的 ASCII 源码；不会自动创建
+  GitHub Release。Steam 侧待 App ID 就绪后接入 steamcmd/steampipe 脚本。
 
 ## 发布前工程状态（2026-07-25）
 
@@ -40,7 +40,8 @@
 
 剩余收口项（均可代理）：
 
-1. **更新交付**：Beta 阶段可先用安装包手动升级；正式发布前补版本检查、下载、校验与回滚策略。
+1. **更新交付**：Beta 阶段可先用安装包手动升级，并比对随 artifact 提供的 SHA-256；正式发布前补版本检查、
+   下载与回滚策略。
 2. **多屏与商店素材**：第二块物理显示器实机走查，以及中性壁纸下的 1920×1080 截图。
 
 ## 风险提醒（调研结论，未变）
