@@ -48,8 +48,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\MacWidg
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\MacWidget.exe"; ValueType: string; ValueName: "Path"; ValueData: "{app}"; Flags: uninsdeletekey
 
 [Run]
-Filename: "{app}\MacWidget.exe"; Description: "{cm:LaunchProgram,MacWidget}"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\MacWidget.exe"; Flags: nowait; Check: ShouldRelaunch
+; --restart-child 会等待旧实例释放单实例锁（最长 10 秒），避免升级后偶发首次拉起即退出。
+Filename: "{app}\MacWidget.exe"; Parameters: "--restart-child"; Description: "{cm:LaunchProgram,MacWidget}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\MacWidget.exe"; Parameters: "--restart-child"; Flags: nowait; Check: ShouldRelaunch
 
 [UninstallDelete]
 ; 卸载安装文件后才删除空目录；若用户手动存放内容，则保守保留。
