@@ -47,22 +47,24 @@ jobs:
             --configuration Release --runtime win-x64 --no-self-contained --no-restore `
             --output publish -p:Version=$version -p:InformationalVersion="$version+$env:GITHUB_SHA"
 
-      - name: Validate installed-app smoke script
+      - name: Validate Windows operational scripts
         shell: pwsh
         run: |
-          $script = Join-Path $env:GITHUB_WORKSPACE 'tools\smoke-installed.ps1'
-          $tokens = $null
-          $errors = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
-          if ($errors.Count -gt 0) {
-            throw "PowerShell parser errors:`n$($errors | Out-String)"
-          }
+          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\verify-installer.ps1')) {
+            $script = Join-Path $env:GITHUB_WORKSPACE $relativePath
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              throw "PowerShell parser errors in ${relativePath}:`n$($errors | Out-String)"
+            }
 
-          # The test machine's Windows PowerShell 5.1 treats BOM-less source as the active code page.
-          # Keep this operational script ASCII-only so it loads identically on every system locale.
-          $nonAscii = @([System.IO.File]::ReadAllBytes($script) | Where-Object { $_ -gt 0x7F })
-          if ($nonAscii.Count -gt 0) {
-            throw 'tools/smoke-installed.ps1 must stay ASCII-only unless it is written with a UTF-8 BOM.'
+            # Windows PowerShell 5.1 treats BOM-less source as the active code page.
+            # Keep operational scripts ASCII-only so they load identically on every system locale.
+            $nonAscii = @([System.IO.File]::ReadAllBytes($script) | Where-Object { $_ -gt 0x7F })
+            if ($nonAscii.Count -gt 0) {
+              throw "$relativePath must stay ASCII-only unless it is written with a UTF-8 BOM."
+            }
           }
 
       - name: Validate embedded WebView2 bootstrapper
@@ -89,6 +91,7 @@ jobs:
           $installer = $installers[0]
           $hash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash *$($installer.Name)" | Set-Content -LiteralPath "$($installer.FullName).sha256" -NoNewline
+          Copy-Item tools/verify-installer.ps1 installer/Verify-MacWidgetInstaller.ps1
 
       - name: Upload private installer artifact
         uses: actions/upload-artifact@v7
@@ -97,5 +100,6 @@ jobs:
           path: |
             installer/MacWidget-Setup-v*.exe
             installer/MacWidget-Setup-v*.exe.sha256
+            installer/Verify-MacWidgetInstaller.ps1
           if-no-files-found: error
           retention-days: 14
