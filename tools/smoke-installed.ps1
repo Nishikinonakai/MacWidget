@@ -7,6 +7,7 @@ param(
     [int]$ReadyTimeoutSeconds = 20,
     [switch]$StartIfNeeded,
     [switch]$RequireMacDeskLink,
+    [switch]$ExerciseRestart,
     [string]$ExpectedVersion,
     [switch]$SkipNetwork
 )
@@ -66,6 +67,21 @@ if ($processes.Count -eq 0 -and $StartIfNeeded) {
 if ($processes.Count -ne 1) {
     $state = if ($processes.Count -eq 0) { 'not running (pass -StartIfNeeded to launch it)' } else { "$($processes.Count) instances were found" }
     throw "The installed app must have exactly one MacWidget.exe instance: $state"
+}
+$originalProcessId = $processes[0].ProcessId
+$restartExercised = $false
+if ($ExerciseRestart) {
+    Start-Process -FilePath $resolvedAppPath -ArgumentList '--restart' -WorkingDirectory $appItem.DirectoryName
+    $restartDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
+    do {
+        Start-Sleep -Milliseconds 250
+        $processes = @(Get-MacWidgetProcesses)
+    } while (($processes.Count -ne 1 -or $processes[0].ProcessId -eq $originalProcessId) -and (Get-Date) -lt $restartDeadline)
+    if ($processes.Count -ne 1 -or $processes[0].ProcessId -eq $originalProcessId) {
+        $state = if ($processes.Count -eq 0) { 'not running' } elseif ($processes.Count -gt 1) { "$($processes.Count) instances were found" } else { "process id stayed $originalProcessId" }
+        throw "The installed app did not complete a safe restart: $state"
+    }
+    $restartExercised = $true
 }
 
 $logPath = Join-Path $env:LOCALAPPDATA 'MacWidget\macwidget.log'
@@ -127,7 +143,9 @@ if (-not $SkipNetwork) {
     AppPath            = $resolvedAppPath
     AppVersion         = $appVersion
     BundledRuntimeFiles = $bundledRuntimeFiles -join ', '
+    OriginalProcessId  = $originalProcessId
     ProcessId          = $processes[0].ProcessId
+    RestartExercised   = $restartExercised
     WebView2Runtime    = $webViewRuntime
     WebView2Ready      = $webViewReady
     TrayReady          = $trayReady

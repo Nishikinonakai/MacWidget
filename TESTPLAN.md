@@ -78,6 +78,16 @@ commit 信息版本。该检查同时确认安装目录带有 `coreclr.dll`、`h
 启动标记之后，旧会话日志不能使本次启动误通过。
 脚本会在 `ReadyTimeoutSeconds` 内轮询这些信号；首次安装或升级后可把该值提高到 `60`。
 
+要同时覆盖 WebView2 Runtime 更新后的安全重启交接，可显式传入 `-ExerciseRestart`。这会使正在运行的
+MacWidget 交接至新 PID，并把单实例、托盘和 MacDesk 就绪信号作为同一次检查的通过条件：
+
+```powershell
+& C:\work\widgetproto\tools\smoke-installed.ps1 `
+  -ExerciseRestart -ReadyTimeoutSeconds 60 -RequireMacDeskLink `
+  -ExpectedVersion 0.2.0-ci.17 |
+  Format-List
+```
+
 从私有 CI artifact 取得 Beta 安装器时，其中已含同名 `.sha256` 与 `Verify-MacWidgetInstaller.ps1`；安装前在
 解压目录执行以下命令核验。文件名与散列必须同时匹配，任一不符都会失败退出：
 
@@ -92,8 +102,7 @@ commit 信息版本。该检查同时确认安装目录带有 `coreclr.dll`、`h
 
 Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runtime update available` 并显示托盘提示，
 不会强制打断桌面。用户从托盘浮层选择“重新启动 MacWidget”后，复用显示拓扑交接的 `--restart-child` 路径。
-回归时可先用 `MacWidget.exe --restart` 触发同一路径，再执行上方冒烟检查，确认单实例、托盘和 MacDesk 联动
-都恢复正常。
+回归时使用上方的 `-ExerciseRestart` 触发同一路径并确认交接后的单实例、托盘和 MacDesk 联动都恢复正常。
 
 ## 结果记录模板
 
