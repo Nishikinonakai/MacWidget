@@ -42,7 +42,7 @@ jobs:
             "0.2.0-ci.$env:GITHUB_RUN_NUMBER"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
-          dotnet restore src/WidgetProto/WidgetProto.csproj
+          dotnet restore src/WidgetProto/WidgetProto.csproj --runtime win-x64
           dotnet publish src/WidgetProto/WidgetProto.csproj `
             --configuration Release --runtime win-x64 --no-self-contained --no-restore `
             --output publish -p:Version=$version -p:InformationalVersion="$version+$env:GITHUB_SHA"

@@ -19,8 +19,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-    <!-- GPU 占用（"GPU Engine" 计数器）；CPU/内存/磁盘走 P/Invoke 不经它 -->
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
