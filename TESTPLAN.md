@@ -63,13 +63,18 @@ NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 
 天气服务和可选的 MacDesk 管道联动。脚本默认只读；首次检查可加 `-StartIfNeeded` 拉起尚未运行的正式安装版。
 
 ```powershell
-& C:\work\widgetproto\tools\smoke-installed.ps1 -StartIfNeeded -RequireMacDeskLink |
+& C:\work\widgetproto\tools\smoke-installed.ps1 `
+  -StartIfNeeded -RequireMacDeskLink -ExpectedVersion 0.2.0-ci.17 |
   Format-List
 ```
 
 `MacDeskLinked` 是状态字段：没有安装或没有运行 MacDesk 时应为 `False`，但不应妨碍 MacWidget 独立使用；
 只有传入 `-RequireMacDeskLink` 时才将其作为失败条件。网络临时不可用时可传 `-SkipNetwork`，其余本地启动项
 仍会检查。
+`ExpectedVersion` 应填入正在验证的安装器文件名中的版本号（例如
+`MacWidget-Setup-v0.2.0-ci.17.exe` 对应 `0.2.0-ci.17`）；它按前缀比较，以允许 CI 写入
+commit 信息版本。该检查同时确认安装目录带有 `coreclr.dll`、`hostfxr.dll` 和 `hostpolicy.dll`，而不是
+意外依赖测试机预装的 .NET。
 
 从私有 CI artifact 取得 Beta 安装器时，其中已含同名 `.sha256` 与 `Verify-MacWidgetInstaller.ps1`；安装前在
 解压目录执行以下命令核验。文件名与散列必须同时匹配，任一不符都会失败退出：

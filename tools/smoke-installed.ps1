@@ -7,6 +7,7 @@ param(
     [int]$ReadyTimeoutSeconds = 20,
     [switch]$StartIfNeeded,
     [switch]$RequireMacDeskLink,
+    [string]$ExpectedVersion,
     [switch]$SkipNetwork
 )
 
@@ -37,6 +38,17 @@ if (-not (Test-Path -LiteralPath $AppPath -PathType Leaf)) {
 }
 $resolvedAppPath = [System.IO.Path]::GetFullPath($AppPath)
 $appItem = Get-Item -LiteralPath $resolvedAppPath
+$appVersion = [string]$appItem.VersionInfo.ProductVersion
+$bundledRuntimeFiles = @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll')
+$missingRuntimeFiles = @($bundledRuntimeFiles | Where-Object {
+    -not (Test-Path -LiteralPath (Join-Path $appItem.DirectoryName $_) -PathType Leaf)
+})
+if ($missingRuntimeFiles.Count -gt 0) {
+    throw "Installed app is missing self-contained .NET runtime files: $($missingRuntimeFiles -join ', ')"
+}
+if ($ExpectedVersion -and -not $appVersion.StartsWith($ExpectedVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Installed app version '$appVersion' does not start with expected version '$ExpectedVersion'."
+}
 $webViewRuntime = Get-WebView2RuntimeVersion
 if (-not $webViewRuntime) {
     throw 'Microsoft Edge WebView2 Runtime was not found. Re-run the MacWidget installer to install it.'
@@ -91,7 +103,8 @@ if (-not $SkipNetwork) {
 
 [pscustomobject][ordered]@{
     AppPath            = $resolvedAppPath
-    AppVersion         = $appItem.VersionInfo.ProductVersion
+    AppVersion         = $appVersion
+    BundledRuntimeFiles = $bundledRuntimeFiles -join ', '
     ProcessId          = $processes[0].ProcessId
     WebView2Runtime    = $webViewRuntime
     WebView2Ready      = $webViewReady
