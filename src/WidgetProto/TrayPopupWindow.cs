@@ -18,7 +18,7 @@ public sealed class TrayPopupWindow : Window
     bool _closing;
 
     const double WidthDiu = 278;
-    const double HeightDiu = 270;
+    const double HeightDiu = 319;
     const double Pad = 12;
 
     public static void Toggle()
@@ -63,6 +63,9 @@ public sealed class TrayPopupWindow : Window
             bool next = !Autostart.IsEnabled();
             if (!Autostart.SetEnabled(next)) Program.Log("tray popup: autostart toggle failed");
         }, ToggleState(autostart)));
+
+        card.Children.Add(ActionRow("重新启动 MacWidget", "应用已下载的 WebView2 安全更新", fg, muted,
+            primary: false, () => TopologyWatcher.RequestRestart("tray restart")));
 
         card.Children.Add(Hairline(dark, 7, 6));
         card.Children.Add(ActionRow("退出 MacWidget", "组件会从桌面隐藏", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), muted,

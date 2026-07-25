@@ -14,6 +14,7 @@ public static class Program
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacWidget");
 
     static int _nextId;
+    static int _webViewRuntimeUpdateNotified;
     public static int NextId() => _nextId++;
 
     [STAThread]
@@ -72,6 +73,9 @@ public static class Program
                     var envOpts = new CoreWebView2EnvironmentOptions();
                     if (Opts.ProcPerSite) envOpts.AdditionalBrowserArguments = "--process-per-site";
                     Env = await CoreWebView2Environment.CreateAsync(null, udf, envOpts);
+                    // Evergreen Runtime 在后台更新；正在跑的 WebView2 仍会停在旧版本，直到应用重启。
+                    // 只提示、不强制中断用户正在摆放的小组件；托盘里的重启动作走既有安全交接流程。
+                    Env.NewBrowserVersionAvailable += (_, _) => NotifyWebView2RuntimeUpdate();
                     Log($"webview2 env ready, runtime={Env.BrowserVersionString} procpersite={Opts.ProcPerSite}");
                 }
 
@@ -124,6 +128,13 @@ public static class Program
     {
         Tray.Uninstall();
         Application.Current.Shutdown();
+    }
+
+    static void NotifyWebView2RuntimeUpdate()
+    {
+        if (Interlocked.Exchange(ref _webViewRuntimeUpdateNotified, 1) != 0) return;
+        Log("webview2 runtime update available; restart requested by user to adopt it");
+        Tray.ShowRuntimeUpdateNotice();
     }
 
     public static void Log(string msg)

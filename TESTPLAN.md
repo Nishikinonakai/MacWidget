@@ -79,6 +79,13 @@ NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 
   Format-List
 ```
 
+### Evergreen WebView2 Runtime 更新
+
+Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runtime update available` 并显示托盘提示，
+不会强制打断桌面。用户从托盘浮层选择“重新启动 MacWidget”后，复用显示拓扑交接的 `--restart-child` 路径。
+回归时可先用 `MacWidget.exe --restart` 触发同一路径，再执行上方冒烟检查，确认单实例、托盘和 MacDesk 联动
+都恢复正常。
+
 ## 结果记录模板
 
 ```

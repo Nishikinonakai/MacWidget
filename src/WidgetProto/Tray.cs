@@ -37,6 +37,25 @@ public static class Tray
         catch { }
     }
 
+    /// <summary>Evergreen WebView2 已更新时的非打扰提示；Windows 可能因用户的通知设置而不显示，日志仍保留。</summary>
+    public static void ShowRuntimeUpdateNotice()
+    {
+        try
+        {
+            Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    _icon?.ShowBalloonTip(8000, "MacWidget 可重启更新",
+                        "WebView2 Runtime 已更新。打开托盘浮层并选择“重新启动 MacWidget”以应用安全更新。",
+                        System.Windows.Forms.ToolTipIcon.Info);
+                }
+                catch { }
+            });
+        }
+        catch { }
+    }
+
     static Icon LoadApplicationIcon()
     {
         try
