@@ -27,7 +27,7 @@ if (-not (Test-Path -LiteralPath $ContentRoot -PathType Container)) {
     throw "SteamPipe content root was not found: $ContentRoot"
 }
 $contentPath = [System.IO.Path]::GetFullPath($ContentRoot)
-$requiredFiles = @('MacWidget.exe', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll', 'THIRD-PARTY-NOTICES.md')
+$requiredFiles = @('MacWidget.exe', 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll', 'THIRD-PARTY-NOTICES.md', 'PRIVACY.md')
 $missingFiles = @($requiredFiles | Where-Object {
     -not (Test-Path -LiteralPath (Join-Path $contentPath $_) -PathType Leaf)
 })

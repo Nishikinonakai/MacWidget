@@ -48,6 +48,13 @@ $missingRuntimeFiles = @($bundledRuntimeFiles | Where-Object {
 if ($missingRuntimeFiles.Count -gt 0) {
     throw "Installed app is missing self-contained .NET runtime files: $($missingRuntimeFiles -join ', ')"
 }
+$requiredNoticeFiles = @('THIRD-PARTY-NOTICES.md', 'PRIVACY.md')
+$missingNoticeFiles = @($requiredNoticeFiles | Where-Object {
+    -not (Test-Path -LiteralPath (Join-Path $appItem.DirectoryName $_) -PathType Leaf)
+})
+if ($missingNoticeFiles.Count -gt 0) {
+    throw "Installed app is missing product notice files: $($missingNoticeFiles -join ', ')"
+}
 if ($ExpectedVersion -and -not $appVersion.StartsWith($ExpectedVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Installed app version '$appVersion' does not start with expected version '$ExpectedVersion'."
 }
@@ -157,6 +164,7 @@ if (-not $SkipNetwork) {
     AppPath            = $resolvedAppPath
     AppVersion         = $appVersion
     BundledRuntimeFiles = $bundledRuntimeFiles -join ', '
+    ProductNoticeFiles = $requiredNoticeFiles -join ', '
     OriginalProcessId  = $originalProcessId
     ProcessId          = $processes[0].ProcessId
     RestartExercised   = $restartExercised

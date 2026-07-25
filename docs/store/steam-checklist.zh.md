@@ -51,6 +51,8 @@
 6. 明亮与深色主题下的组件、托盘浮层真机视觉走查。
 7. 安装目录随产品交付 `THIRD-PARTY-NOTICES.md`：WebView2 SDK 的 BSD-3-Clause 再发布声明，以及
    MET Norway 天气数据的 CC BY 4.0 署名与许可链接；CI 检查该文件进入 publish 目录。
+   `PRIVACY.md` 同时随包交付，说明天气直连会向 MET Norway 暴露请求坐标和常规网络元数据；CI 和已安装版
+   冒烟脚本都会检查这两份文件存在。
 8. 私有 CI 安装器已在 home-win 真机完成 SHA-256 校验、旧正式版升级和静默重装：验证单实例、内置
    `coreclr.dll` / `hostfxr.dll` / `hostpolicy.dll`、WebView2、托盘、MacDesk 管道、天气与许可通知；
    `settings.json` 和 `layout.json` 在重装前后保持不变。完整证据见

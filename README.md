@@ -39,12 +39,13 @@ WebView2 Runtime 会由 Microsoft 独立更新。MacWidget 检测到新版运行
 - Microsoft Edge WebView2 Runtime（安装器会在缺失时引导安装）。
 - 建议 8 GB 以上内存；实际占用随组件数量、照片和媒体内容变化。
 
-没有账号、遥测或自建后端。天气请求会直接发送到 MET Norway；其余组件数据均在本机读取。
+没有账号、第一方遥测或自建后端。天气请求会直接发送到 MET Norway；因此对方会收到所选城市坐标、
+应用 User-Agent 和常规网络元数据（包括 IP 地址），其余组件数据均在本机读取。
 天气数据来源为 [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/compact)，
 遵循其 CC-BY 4.0 许可与请求频率要求。
 
 安装目录中的 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 列出 WebView2 SDK 的再发布通知，以及
-MET Norway 天气数据的完整署名与许可链接。
+MET Norway 天气数据的完整署名与许可链接；完整的数据流说明见 [PRIVACY.md](PRIVACY.md)。
 
 ## 可选：配合 MacDesk
 

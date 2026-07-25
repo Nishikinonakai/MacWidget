@@ -67,17 +67,27 @@ jobs:
             }
           }
 
-      - name: Verify shipped third-party notices
+      - name: Verify shipped product notices
         shell: pwsh
         run: |
           $notices = Join-Path $env:GITHUB_WORKSPACE 'publish\THIRD-PARTY-NOTICES.md'
+          $privacy = Join-Path $env:GITHUB_WORKSPACE 'publish\PRIVACY.md'
           if (-not (Test-Path -LiteralPath $notices -PathType Leaf)) {
             throw 'THIRD-PARTY-NOTICES.md was not copied to the publish directory.'
+          }
+          if (-not (Test-Path -LiteralPath $privacy -PathType Leaf)) {
+            throw 'PRIVACY.md was not copied to the publish directory.'
           }
           $text = Get-Content -LiteralPath $notices -Raw
           foreach ($requiredText in @('Microsoft.Web.WebView2', 'MET Norway', 'CC BY 4.0')) {
             if ($text -notlike "*$requiredText*") {
               throw "Published third-party notices are missing: $requiredText"
+            }
+          }
+          $privacyText = Get-Content -LiteralPath $privacy -Raw
+          foreach ($requiredText in @('MET Norway', 'IP address', 'geocoordinates', 'MacWidget')) {
+            if ($privacyText -notlike "*$requiredText*") {
+              throw "Published privacy notice is missing: $requiredText"
             }
           }
 
