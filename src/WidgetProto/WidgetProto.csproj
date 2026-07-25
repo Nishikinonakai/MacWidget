@@ -5,6 +5,8 @@
     <!-- 必须带 Windows SDK 版本：WebView2CompositionControl 依赖 WinRT 投影（Microsoft.Windows.SDK.NET） -->
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- 托盘 NotifyIcon（Tray.cs）；UI 主体仍是 WPF -->
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -18,6 +20,13 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
     <!-- GPU 占用（"GPU Engine" 计数器）；CPU/内存/磁盘走 P/Invoke 不经它 -->
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms 会隐式全局 using System.Drawing / System.Windows.Forms，
+         与 WPF 的 Point/Brush 撞歧义（CS0104）——拆掉，Tray.cs 自带显式 using -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
   <ItemGroup>
