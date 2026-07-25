@@ -50,7 +50,7 @@ jobs:
       - name: Validate Windows operational scripts
         shell: pwsh
         run: |
-          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\verify-installer.ps1', 'tools\prepare-steampipe.ps1')) {
+          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\verify-installer.ps1', 'tools\prepare-steampipe.ps1', 'tools\verify-steam-content.ps1')) {
             $script = Join-Path $env:GITHUB_WORKSPACE $relativePath
             $tokens = $null
             $errors = $null
@@ -90,6 +90,32 @@ jobs:
             }
           }
 
+      - name: Write Steam content SHA-256 manifest
+        shell: pwsh
+        run: |
+          $contentRoot = (Resolve-Path publish).Path
+          $manifestDir = Join-Path $env:GITHUB_WORKSPACE 'steam-content'
+          New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
+          $manifest = Join-Path $manifestDir "MacWidget-Steam-Content-${{ steps.version.outputs.version }}.sha256"
+          $entries = @(
+            Get-ChildItem -LiteralPath $contentRoot -Recurse -File |
+              Sort-Object FullName |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($contentRoot.Length).TrimStart('\') -replace '\\', '/'
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash *$relative"
+              }
+          )
+          if ($entries.Count -eq 0) { throw 'Steam content publish directory is empty.' }
+          Set-Content -LiteralPath $manifest -Value $entries -Encoding ascii
+
+      - name: Verify Steam content SHA-256 manifest
+        shell: pwsh
+        run: |
+          $manifests = @(Get-ChildItem steam-content -Filter 'MacWidget-Steam-Content-*.sha256' -File)
+          if ($manifests.Count -ne 1) { throw "Expected one Steam content manifest, found $($manifests.Count)." }
+          & tools/verify-steam-content.ps1 -ContentRoot publish -ChecksumPath $manifests[0].FullName
+
       - name: Validate embedded WebView2 bootstrapper
         shell: pwsh
         run: |
@@ -124,5 +150,16 @@ jobs:
             installer/MacWidget-Setup-v*.exe
             installer/MacWidget-Setup-v*.exe.sha256
             installer/Verify-MacWidgetInstaller.ps1
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload private Steam content artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MacWidget-Steam-Content-${{ steps.version.outputs.version }}
+          path: |
+            publish/**
+            steam-content/MacWidget-Steam-Content-*.sha256
+            tools/verify-steam-content.ps1
           if-no-files-found: error
           retention-days: 14

@@ -17,6 +17,24 @@ MacWidget 在 Steam 上应直接分发 self-contained publish 目录，而不是
 上述口径来自 Valve 的 SteamPipe 上传文档；默认分支不能由脚本自动设为 live，建议先把构建放到私有 beta
 branch 中测试，再在 Steamworks 后台决定是否发布。
 
+## 取得可复现的内容目录
+
+每次私有 CI 成功后，都会保留 14 天一个 `MacWidget-Steam-Content-<version>` artifact。它包含：
+
+- `publish/`：与同次 Inno 安装器同源的 self-contained 应用内容；
+- `steam-content/MacWidget-Steam-Content-<version>.sha256`：内容逐文件 SHA-256；
+- `tools/verify-steam-content.ps1`：工件解压后的内容校验器。
+
+解压后先校验再将 `publish/` 作为 SteamPipe `ContentRoot`：
+
+```powershell
+& .\tools\verify-steam-content.ps1 `
+  -ContentRoot .\publish `
+  -ChecksumPath .\steam-content\MacWidget-Steam-Content-<version>.sha256
+```
+
+如果需要本地临时构建，也可直接生成相同结构的 self-contained publish 目录：
+
 ## 生成 VDF（不上传）
 
 先从当前源码生成正式内容目录：
