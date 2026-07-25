@@ -9,7 +9,8 @@
 1. **公开产品名决策** — 当前技术名称 `MacWidget` 不可直接用于商店。公开初筛发现 App Store 已有同名同类的
    [MacWidget - Desktop Widgets](https://apps.apple.com/us/app/macwidget-desktop-widgets/id6747938136?mt=12)；这不是法律
    结论，但在名称/商标正式确认前，不能制作标题字标、上传 capsule 或创建公开 Steam 页面。选定替代名后我会
-   统一更新商店文案、安装器、应用标识和素材。
+   统一更新商店文案、安装器、应用标识和素材。可直接从 [命名 shortlist](naming-shortlist.zh.md) 的三组候选中
+   决定，或提供一个新的名称让我复核。
 2. **Steamworks 合作伙伴注册** — partner.steamgames.com
    - 个人（Sole Proprietorship）可注册；$100 应用押金（游戏收入 $1,000 后返还）
    - 需要：身份证件、银行收款信息（USD SWIFT 打个人卡可行，先例：MyDockFinder）
