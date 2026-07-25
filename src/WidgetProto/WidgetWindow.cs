@@ -16,13 +16,17 @@ public sealed class WidgetWindow : Window
     bool _removing;
 
     public string Kind { get; }
+    public string SizeClass { get; private set; }
 
+    /// <param name="size">尺寸档 s/m/l；null 或不支持 = kind 默认档（老档案兼容）</param>
     /// <param name="x">帧左上（DIU）；空 = 实验模式栅格位</param>
     /// <param name="lifted">出生即升层（面板拖出中的新组件，不先钉底）</param>
-    public WidgetWindow(int i, string kind, double? x = null, double? y = null, bool lifted = false)
+    public WidgetWindow(int i, string kind, string? size = null, double? x = null, double? y = null, bool lifted = false)
     {
         _i = i;
         Kind = kind;
+        SizeClass = size != null && WidgetRegistry.SizesOf(kind).Contains(size)
+            ? size : WidgetRegistry.DefaultSize(kind);
         _startLifted = lifted;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -33,7 +37,7 @@ public sealed class WidgetWindow : Window
         Title = $"WidgetProto {i} {kind}";
 
         // 窗口 = 帧（摆放/避让/组格距的原子单位）；可视卡由页面 CSS 画（内衬 8、圆角 20、阴影）
-        (Width, Height) = WidgetRegistry.Size(kind);
+        (Width, Height) = WidgetRegistry.Size(kind, SizeClass);
 
         WindowStartupLocation = WindowStartupLocation.Manual;
         if (x is { } xl && y is { } yt) { Left = xl; Top = yt; }
@@ -50,6 +54,7 @@ public sealed class WidgetWindow : Window
         Loaded += OnLoaded;
         Closed += (_, _) =>
         {
+            DataHub.Drop(this);             // 订阅随窗口生命周期，最后一个走人即停采样
             if (!_removing) return;
             WidgetLink.Send(force: true);   // 管道对面即时回位
             Layout.Save();
@@ -179,6 +184,25 @@ public sealed class WidgetWindow : Window
         catch (Exception ex) { Program.Log($"widget {_i} poststate FAIL: {ex.Message}"); }
     }
 
+    /// <summary>数据桥投递（DataHub 调）；core 未就绪静默丢——订阅回放兜住后续。</summary>
+    public void PostJson(string json)
+    {
+        try { _core?.PostWebMessageAsJson(json); }
+        catch (Exception ex) { Program.Log($"widget {_i} postjson FAIL: {ex.Message}"); }
+    }
+
+    /// <summary>切尺寸档（菜单调）：帧改尺寸、左上角锚定，违规才纠正动画（与拖拽落位同引擎）。</summary>
+    public void ApplySize(string size)
+    {
+        if (size == SizeClass || !WidgetRegistry.SizesOf(Kind).Contains(size)) return;
+        SizeClass = size;
+        (Width, Height) = WidgetRegistry.Size(Kind, size);
+        Program.Log($"widget {_i} ({Kind}) size -> {size}");
+        var res = Resolve(Left, Top);
+        if (res.Corrected) AnimateTo(res.L, res.T);
+        else { WidgetLink.Send(force: true); Layout.Save(); }
+    }
+
     /// <summary>移除：页面缩退动画（bye）→ 收窗 → 持久化/联动即时更新。</summary>
     public void ByeAndClose()
     {
@@ -210,6 +234,14 @@ public sealed class WidgetWindow : Window
                     break;
                 case "edit":
                     EditMode.Toggle();
+                    break;
+                case "menu":
+                    // 右键出 macOS 式菜单（尺寸/编辑/移除）；坐标=屏幕 DIP，与 DIU 同标度
+                    MenuWindow.Open(this, root.GetProperty("x").GetDouble(), root.GetProperty("y").GetDouble());
+                    break;
+                case "sub":
+                    if (root.GetProperty("topic").GetString() is { Length: > 0 } topic)
+                        DataHub.Subscribe(this, topic);
                     break;
                 case "remove":
                     ByeAndClose();

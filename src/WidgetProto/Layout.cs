@@ -4,16 +4,32 @@ using System.Windows;
 
 namespace WidgetProto;
 
-/// <summary>组件目录：kind → 帧尺寸（Small 180 / Medium 360×180 / Large 360×360）与默认演示组。</summary>
+/// <summary>组件目录：kind → 支持的尺寸档与帧尺寸（s 180 / m 360×180 / l 360×360）。</summary>
 public static class WidgetRegistry
 {
     public static readonly string[] Kinds = { "clock", "calendar", "monitor", "weather", "photo" };
 
-    public static (double W, double H) Size(string kind) => kind switch
+    /// <summary>kind 支持的尺寸档（macOS 语义：组件自报支持档；monitor 先开 s/m 当打样）。</summary>
+    public static string[] SizesOf(string kind) => kind switch
     {
-        "weather" => (Placement.Unit * 2, Placement.Unit),      // Medium 2×1
-        "photo" => (Placement.Unit * 2, Placement.Unit * 2),    // Large 2×2
-        _ => (Placement.Unit, Placement.Unit),                  // Small
+        "monitor" => new[] { "s", "m" },
+        "weather" => new[] { "m" },
+        "photo"   => new[] { "l" },
+        _         => new[] { "s" },
+    };
+
+    public static string DefaultSize(string kind) => kind switch
+    {
+        "weather" => "m",
+        "photo"   => "l",
+        _         => "s",
+    };
+
+    public static (double W, double H) Size(string kind, string size) => size switch
+    {
+        "m" => (Placement.Unit * 2, Placement.Unit),
+        "l" => (Placement.Unit * 2, Placement.Unit * 2),
+        _   => (Placement.Unit, Placement.Unit),
     };
 }
 
@@ -24,7 +40,8 @@ public static class WidgetRegistry
 /// </summary>
 public static class Layout
 {
-    public sealed record Entry(string Kind, double X, double Y);
+    /// <summary>Size 为 null = 老档案（尺寸档之前），落到 kind 默认档。</summary>
+    public sealed record Entry(string Kind, double X, double Y, string? Size = null);
 
     static string PathOf => System.IO.Path.Combine(Program.BaseDir, "widgets.json");
     static string Key()
@@ -89,7 +106,7 @@ public static class Layout
             var list = new List<Entry>();
             foreach (Window w in Application.Current.Windows)
                 if (w is WidgetWindow ww && ww.IsVisible)
-                    list.Add(new Entry(ww.Kind, ww.Left, ww.Top));
+                    list.Add(new Entry(ww.Kind, ww.Left, ww.Top, ww.SizeClass));
             doc[Key()] = list;
             File.WriteAllText(PathOf, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true }));
             Program.Log($"layout saved: {list.Count} widgets @ {Key()}");

@@ -76,6 +76,22 @@ public static class Native
     [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", CharSet = CharSet.Unicode)]
     public static extern bool QueryFullProcessImageName(IntPtr h, uint flags, char[] buf, ref int size);
 
+    // ---- 系统计数器（SysMonProvider）----
+
+    [DllImport("kernel32.dll")]
+    public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MEMORYSTATUSEX
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhys, AvailPhys, TotalPageFile, AvailPageFile, TotalVirtual, AvailVirtual, AvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll")]
+    public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buf);
+
     public static string ProcessImageName(uint pid)
     {
         var h = OpenProcess(0x1000 /*PROCESS_QUERY_LIMITED_INFORMATION*/, false, pid);

@@ -1,5 +1,6 @@
 // 宿主注入运行时（AddScriptToExecuteOnDocumentCreated 注入，组件作者零感知）：
-// ① 状态类驱动（dark/mono/editing/bye）② 编辑态减号徽章 ③ 右键=编辑模式 ④ 拖拽摆位上报。
+// ① 状态类驱动（dark/mono/editing/bye）② 编辑态减号徽章 ③ 右键=组件菜单 ④ 拖拽摆位上报
+// ⑤ 数据桥 mw.subscribe。
 // 注入前宿主会先注入 window.__mwInit = {dark,mono,editing} 快照，导航完成后再补推一次兜住竞态。
 // ⚠️ document-created 时机 documentElement 可能尚未存在——一切 DOM 访问都要懒取+兜底，
 //    任何顶层异常都会杀死整个运行时（含拖拽），所以 try 包住非关键段。
@@ -7,6 +8,17 @@
   if (window.__mwHost) return; window.__mwHost = true;
 
   const post = m => { try { window.chrome?.webview?.postMessage(m); } catch { } };
+
+  // 数据桥：组件页 mw.subscribe(topic, fn) 订阅宿主数据源。信封
+  // {status:'ok'|'loading'|'error', stale, ts, data, error}——error 时 data 是最后一份好数据（可能 null）。
+  // 页面每次导航重新执行到这里，重发 sub 即拿到快照回放，无需自己缓存。
+  const subs = Object.create(null);
+  window.mw = {
+    subscribe(topic, fn) {
+      (subs[topic] || (subs[topic] = [])).push(fn);
+      post({ t: 'sub', topic: topic });
+    },
+  };
 
   let pending = null;
   function apply(s) {
@@ -24,6 +36,7 @@
       const m = e.data || {};
       if (m.t === 'state') apply(m);
       else if (m.t === 'bye') apply({ bye: 1 });
+      else if (m.t === 'data') (subs[m.topic] || []).forEach(fn => { try { fn(m); } catch { } });
     });
   } catch { }
 
@@ -38,8 +51,11 @@
     } catch { }
   });
 
-  // 右键 = 编辑模式开关（macOS 为菜单项 Edit Widgets…，MVP 直达）
-  addEventListener('contextmenu', e => { e.preventDefault(); post({ t: 'edit' }); }, true);
+  // 右键 = macOS 式组件菜单（尺寸档/编辑小组件…/移除）；screenX/Y 是 DIP，与宿主 DIU 同标度
+  addEventListener('contextmenu', e => {
+    e.preventDefault();
+    post({ t: 'menu', x: e.screenX, y: e.screenY });
+  }, true);
 
   // 拖拽摆位（原型验证过的机制原样保留）
   let sx = 0, sy = 0, armed = false, dragging = false;

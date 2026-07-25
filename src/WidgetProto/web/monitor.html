@@ -2,10 +2,14 @@
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="widget.css">
 <style>
-  /* 系统监视 · Small：2×2 绿环网格（macOS Batteries 同形态；自绘深磨砂底，深浅外观不变） */
+  /* 系统监视 · 绿环仪表（自绘深磨砂底，深浅外观不变；数据 = 宿主 sysmon 真实计数器）。
+     Small（180 帧）2×2 网格；Medium（360 帧，视口 ≥300px）单行四环。 */
   :root { --tint: #30D158; }
   .card { --own-bg: rgba(36,36,40,.90); }
   .content { display: grid; grid-template: 1fr 1fr / 1fr 1fr; place-items: center; padding: 10px; }
+  @media (min-width: 300px) {
+    .content { grid-template: 1fr / repeat(4, 1fr); padding: 10px 20px; }
+  }
   .cell { position: relative; width: 62px; height: 62px; }
   svg { width: 62px; height: 62px; transform: rotate(-90deg); }
   .track { fill: none; stroke: rgba(255,255,255,.16); stroke-width: 5.5; }
@@ -15,28 +19,30 @@
          color: #fff; }
   .lab b { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .lab span { font-size: 8.5px; letter-spacing: .5px; opacity: .65; font-weight: 600; }
+  /* 数据桥 error/stale：最后好数据仍在画，数值降调表明"这是旧的"（不装死也不撒谎） */
+  .content.stale .lab { opacity: .5; transition: opacity .3s ease; }
 </style></head><body>
 <div class="card"><div class="content" id="g"></div></div>
 <script>
-  const defs = [['CPU', 0.32], ['内存', 0.61], ['GPU', 0.18], ['磁盘', 0.47]];
+  const names = ['CPU', '内存', 'GPU', '磁盘'], keys = ['cpu', 'mem', 'gpu', 'disk'];
   const R = 27, C = 2 * Math.PI * R, g = document.getElementById('g');
-  g.innerHTML = defs.map(([n], i) => `
+  g.innerHTML = names.map((n, i) => `
     <div class="cell">
       <svg viewBox="0 0 62 62">
         <circle class="track" cx="31" cy="31" r="${R}"/>
         <circle class="ring" id="r${i}" cx="31" cy="31" r="${R}" stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
       </svg>
-      <div class="lab"><b id="v${i}">0%</b><span>${n}</span></div>
+      <div class="lab"><b id="v${i}">—</b><span>${n}</span></div>
     </div>`).join('');
-  function set(i, p) {
-    document.getElementById('r' + i).style.strokeDashoffset = C * (1 - p);
-    document.getElementById('v' + i).textContent = Math.round(p * 100) + '%';
+  function set(i, p) {   // p == null → n/a（无此计数器/首采无基线），环空、值 "—"
+    document.getElementById('r' + i).style.strokeDashoffset = C * (1 - (p ?? 0));
+    document.getElementById('v' + i).textContent = p == null ? '—' : Math.round(p * 100) + '%';
   }
-  defs.forEach(([, p], i) => setTimeout(() => set(i, p), 80 * i + 120));
-  setInterval(() => {   // CPU/内存轻微游走（监控类组件的活性负载形态）
-    defs[0][1] = Math.min(.95, Math.max(.06, defs[0][1] + (Math.random() - .5) * .1));
-    defs[1][1] = Math.min(.9, Math.max(.3, defs[1][1] + (Math.random() - .5) * .04));
-    set(0, defs[0][1]); set(1, defs[1][1]);
-  }, 1600);
+  window.mw?.subscribe('sysmon', m => {   // 裸浏览器打开（无宿主注入）= 静态骨架，便于单页调样式
+    if (m.status === 'loading') return;                       // 骨架初值已是 —
+    g.classList.toggle('stale', m.status !== 'ok' || !!m.stale);
+    if (!m.data) return;                                      // error 且无历史好数据：保持骨架
+    keys.forEach((k, i) => set(i, m.data[k]));
+  });
 </script>
 </body></html>

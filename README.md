@@ -15,11 +15,30 @@ MacWidget（Windows 上的 macOS 风格桌面小组件，规划中的付费产�
 src/WidgetProto/        net10.0-windows WPF 宿主（无 XAML，代码构 UI）
   Program.cs            入口 + 共享 WebView2 环境 + 日志(proto.log)
   WidgetWindow.cs       组件窗：无边框/透明直通/材质/贴底/不抢焦点
-  Native.cs             DWM + BottomPin P/Invoke
-  web/*.html            四个示例组件（时钟rAF/CPU canvas 10Hz/天气/照片KenBurns）
+  DataHub.cs            宿主→组件数据桥（订阅者门控采样 + 信封协议）
+  SysMon.cs             sysmon 数据源（CPU/内存/磁盘/GPU 真实计数器）
+  MenuWindow.cs         组件右键菜单（尺寸档/编辑/移除，纯 WPF 弹层）
+  Native.cs             DWM + BottomPin + 计数器 P/Invoke
+  web/*.html            五个组件（时钟/日历/系统监视/天气/照片）
 tools/*.ps1             home-win 侧：内存采样、单轮矩阵、z 序 dump
 deploy.sh               Mac 侧构建（绕代理）+ scp 到 home-win C:\work\widgetproto
 ```
+
+## 数据桥（组件作者 API，2026-07-25 起）
+
+组件页从宿主注入的 `mw` 拿数据，零依赖零配置（裸浏览器打开时 `window.mw` 不存在，页面自己 `?.` 守卫即得静态骨架）：
+
+```js
+window.mw?.subscribe('sysmon', m => {
+  // m = {status:'ok'|'loading'|'error', stale, ts, data, error}
+  // · loading：首采未归（骨架期）
+  // · error：采样失败，data 是最后一份好数据（可能 null）+ stale:true
+  // · data 内单字段拿不到 = null（如无 GPU 计数器的机器）→ 画 "—"
+});
+```
+
+宿主侧数据源实现 `IDataProvider`（见 DataHub.cs），**有订阅者才采样**；
+现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）。将来天气等联网源走同一契约直接插。
 
 ## 命令行
 

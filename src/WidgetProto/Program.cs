@@ -29,6 +29,8 @@ public static class Program
         {
             try
             {
+                DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
+
                 if (Opts.Control != "native")
                 {
                     // 全部组件共享同一个 Environment（同一 udf）→ 共享 browser/GPU 进程；
@@ -54,7 +56,7 @@ public static class Program
                 {
                     // 产品模式：恢复本分辨率档的摆位（无档 = 默认演示组）
                     foreach (var it in Layout.LoadOrDefault())
-                        new WidgetWindow(NextId(), it.Kind, it.X, it.Y).Show();
+                        new WidgetWindow(NextId(), it.Kind, it.Size, it.X, it.Y).Show();
                 }
                 Log("all windows shown");
 

@@ -138,10 +138,11 @@ public sealed class PanelWindow : Window
     void StartPickup(string kind)
     {
         if (_pick != null || !WidgetRegistry.Kinds.Contains(kind)) return;
-        var (w, h) = WidgetRegistry.Size(kind);
+        var size = WidgetRegistry.DefaultSize(kind);
+        var (w, h) = WidgetRegistry.Size(kind, size);
         double k = Dpi();
         Native.GetCursorPos(out var pt);
-        var ww = new WidgetWindow(Program.NextId(), kind, pt.X / k - w / 2, pt.Y / k - h / 2, lifted: true);
+        var ww = new WidgetWindow(Program.NextId(), kind, size, pt.X / k - w / 2, pt.Y / k - h / 2, lifted: true);
         ww.Show();
         _pick = ww;
         Program.Log($"panel pickup {kind}");
