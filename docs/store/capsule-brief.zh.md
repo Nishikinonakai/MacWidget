@@ -4,6 +4,15 @@
 [`assets/macwidget-capsule-concept-v1.png`](assets/macwidget-capsule-concept-v1.png)，它是方向验证，**不是**
 可直接上传的 capsule。最终素材必须在名称、标题字形和法务风险确认后制作。
 
+## 截图背景（已备好，尚未应用）
+
+[`assets/macwidget-neutral-wallpaper-v1.png`](assets/macwidget-neutral-wallpaper-v1.png) 是一张 3840×2160 的
+无文字、中性深灰桌面壁纸，中心保持低细节与低对比，专供拍摄商店截图时衬托浅色和深色组件。它不是
+capsule，也不包含产品标识，不应上传到 Steam。
+
+实际拍摄前须取得机主授权；先记录当前壁纸及其显示方式，再临时应用该文件，完成 4K 截图和所需的
+1920×1080 导出后立即恢复原壁纸并目视确认。不要在未授权或机器正在使用时更改桌面设置。
+
 ## 已定视觉方向
 
 - 深靛蓝到紫色的夜间桌面氛围；半透明玻璃组件卡片表达时钟、日历、天气、音乐四个核心场景。
@@ -43,8 +52,8 @@ PG-13，并且产品名称必须在 capsule 中清晰可读。
 1. 机主确认产品名称与该蓝紫玻璃方向。
 2. 用真实的标题字标覆盖到主视觉右侧安全留白；先输出 Main Capsule，再同源裁切 Header、Small 和 Vertical。
 3. 从无文字主视觉另出 Library Hero 和透明 Library Logo；不要把标题烘焙进 Hero。
-4. 切换到中性壁纸后，补拍 1920×1080 的七组件、编辑模式、天气/音乐、Automatic 对比、照片配置和
-   MacDesk 避让联动素材。
+4. 经机主授权后，临时使用上述中性壁纸，补拍 1920×1080 的七组件、编辑模式、天气/音乐、Automatic
+   对比、照片配置和 MacDesk 避让联动素材；结束时恢复原壁纸。
 5. 逐张套 Steam 当期官方模板检查裁切、安全区和小尺寸可读性，再上传 Steamworks。
 
 ## 依据

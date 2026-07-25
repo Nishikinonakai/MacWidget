@@ -17,8 +17,9 @@
 
 - 商店文案（中英）→ `store-copy.zh-en.md`
 - 定价与免费策略 → `pricing-freemium.zh.md`
-- 截图素材：真机 4K 实拍已有一批（含各组件/明暗主题/编辑模式）；上架前需在**中性壁纸**下补拍
-  一组 1920×1080 标准图（要动机主桌面壁纸，等机主在场或授权）
+- 截图素材：真机 4K 实拍已有一批（含各组件/明暗主题/编辑模式）；已备 3840×2160 的
+  `assets/macwidget-neutral-wallpaper-v1.png` 作为中性背景。上架前须在机主在场或授权下临时应用它，补拍
+  一组 1920×1080 标准图，并在结束后恢复原桌面壁纸。
 - 胶囊图（capsule）：首个无文字主视觉概念稿已在 `assets/macwidget-capsule-concept-v1.png`；旧的
   616×353 / 231×87 模板已废弃，须按当前 1232×706 Main、920×430 Header、462×174 Small、748×896
   Vertical 等规格制作。完整尺寸、合规边界和交付顺序见 [capsule-brief.zh.md](capsule-brief.zh.md)；最终
