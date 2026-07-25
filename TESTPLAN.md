@@ -54,6 +54,8 @@ cd ~/Documents/Windows_desktop_macOSfied/widgetproto
 ./deploy.sh 192.168.1.8        # publish（框架依赖，home-win 已有 .NET 10 Desktop 运行时）+ scp
 ```
 NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 认证已配好。
+`deploy.sh` 是快速开发部署，故有意保持框架依赖；GitHub Actions 产出的正式 Inno 安装器是
+`win-x64` 自包含发布，必须包含 `coreclr.dll`、`hostfxr.dll` 和 `hostpolicy.dll`，终端用户无需单独安装 .NET。
 
 ## 正式安装版冒烟检查
 

@@ -5,6 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 IP="${1:-192.168.1.8}"
 
+# 开发机增量部署刻意保持 framework-dependent（home-win 已有 .NET 10 Desktop Runtime，传输更快）。
+# 正式 CI 安装器使用 --self-contained true，不能改成这一条的 --no-self-contained。
 # NuGet 直连（Clash 代理会掐 api.nuget.org 的 TLS 握手）
 env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
   ~/.dotnet/dotnet publish src/WidgetProto -c Release -r win-x64 --no-self-contained -o publish

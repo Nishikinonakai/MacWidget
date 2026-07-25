@@ -35,6 +35,7 @@ WebView2 Runtime 会由 Microsoft 独立更新。MacWidget 检测到新版运行
 ## 系统要求与隐私
 
 - Windows 10 1903+ 或 Windows 11，x64。
+- 正式安装器自带所需的 .NET 10 Desktop Runtime；不需要预先安装 .NET。
 - Microsoft Edge WebView2 Runtime（安装器会在缺失时引导安装）。
 - 建议 8 GB 以上内存；实际占用随组件数量、照片和媒体内容变化。
 
@@ -54,8 +55,8 @@ MacDesk 与 MacWidget 可以独立安装。两者都在运行时，MacWidget 会
 ## 从源码构建
 
 ```bash
-# 发布 x64 Windows 构建
-~/.dotnet/dotnet publish src/WidgetProto -c Release -r win-x64 --no-self-contained -o publish
+# 发布 x64 Windows 自包含构建（终端用户不需要预装 .NET）
+~/.dotnet/dotnet publish src/WidgetProto -c Release -r win-x64 --self-contained true -o publish
 
 # 部署到已配置的 Windows 测试机
 ./deploy.sh 192.168.1.8

@@ -44,7 +44,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           dotnet restore src/WidgetProto/WidgetProto.csproj --runtime win-x64
           dotnet publish src/WidgetProto/WidgetProto.csproj `
-            --configuration Release --runtime win-x64 --no-self-contained --no-restore `
+            --configuration Release --runtime win-x64 --self-contained true --no-restore `
             --output publish -p:Version=$version -p:InformationalVersion="$version+$env:GITHUB_SHA"
 
       - name: Validate Windows operational scripts
@@ -78,6 +78,15 @@ jobs:
           foreach ($requiredText in @('Microsoft.Web.WebView2', 'MET Norway', 'CC BY 4.0')) {
             if ($text -notlike "*$requiredText*") {
               throw "Published third-party notices are missing: $requiredText"
+            }
+          }
+
+      - name: Verify self-contained .NET runtime
+        shell: pwsh
+        run: |
+          foreach ($runtimeFile in @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "publish\$runtimeFile") -PathType Leaf)) {
+              throw "Self-contained publish is missing $runtimeFile."
             }
           }
 
