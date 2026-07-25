@@ -40,7 +40,16 @@ window.mw?.subscribe('sysmon', m => {
 宿主侧数据源实现 `IDataProvider`（见 DataHub.cs），**有订阅者才采样**；
 反向通道 `mw.send(topic, cmd)` → provider 的 `ICommandSink`（命令后 250ms 快拍一帧跟手）。
 现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）、`music`（GSMTC 正在播放，1s；
-cmd = playpause/next/prev）。将来天气等联网源走同一契约直接插。
+cmd = playpause/next/prev）、`battery`（2s；simbatt.json 模拟座）。将来天气等联网源走同一契约直接插。
+
+**组件设置流（编辑小组件翻面）**：菜单"编辑「×」"→ 宿主发 `editcfg` → host.js 给 `<html>`
+加 `.cfgmode` 类（页面自备配置脸，CSS 翻面）。页面侧 API：`mw.cfg()` 读实例配置、
+`mw.saveCfg(obj)` 存（宿主落 widgets.json 的 Cfg 字段，形状组件自定）、
+`mw.pickFolder(fn)` 原生选文件夹、`mw.exitCfg()` 收面、`mw.on(type,fn)` 收宿主专发消息、
+`mw.log(x)` 写宿主 proto.log（页面排障唯一喉舌）。
+⚠️ photo 的源**整个由宿主 WebResourceRequested 供流**（页面文件+`__photos/*` 照片）：
+被 `SetVirtualHostNameToFolderMapping` 完整映射的源会在更低层短路、该源上拦截器**永不触发**，
+跨虚拟主机取子资源也一律失败——要拦截就别映射，二选一（真机实锤）。
 
 ## 命令行
 

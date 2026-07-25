@@ -12,7 +12,8 @@
   // 数据桥：组件页 mw.subscribe(topic, fn) 订阅宿主数据源。信封
   // {status:'ok'|'loading'|'error', stale, ts, data, error}——error 时 data 是最后一份好数据（可能 null）。
   // 页面每次导航重新执行到这里，重发 sub 即拿到快照回放，无需自己缓存。
-  const subs = Object.create(null);
+  const subs = Object.create(null), evs = Object.create(null), pickQ = [];
+  let cfg = (window.__mwInit && window.__mwInit.cfg) || null;
   window.mw = {
     subscribe(topic, fn) {
       (subs[topic] || (subs[topic] = [])).push(fn);
@@ -21,6 +22,13 @@
     send(topic, cmd) {   // 反向通道：播控等命令 → 宿主 provider（ICommandSink）
       post({ t: 'cmd', topic: topic, cmd: cmd });
     },
+    // ---- 组件设置流（编辑小组件翻面）----
+    cfg() { return cfg; },                             // 当前实例配置（宿主持久化在 widgets.json）
+    saveCfg(c) { cfg = c; post({ t: 'cfg', cfg: c }); },
+    pickFolder(fn) { pickQ.push(fn); post({ t: 'pickfolder' }); },   // 原生选文件夹，fn(path|null)
+    exitCfg() { try { document.documentElement.classList.remove('cfgmode'); } catch { } },
+    on(type, fn) { (evs[type] || (evs[type] = [])).push(fn); },      // 宿主专发消息（如照片清单）
+    log(m) { post({ t: 'dbg', m: String(m) }); },                    // 排障：写进宿主 proto.log
   };
 
   let pending = null;
@@ -40,6 +48,9 @@
       if (m.t === 'state') apply(m);
       else if (m.t === 'bye') apply({ bye: 1 });
       else if (m.t === 'data') (subs[m.topic] || []).forEach(fn => { try { fn(m); } catch { } });
+      else if (m.t === 'editcfg') { try { document.documentElement.classList.add('cfgmode'); } catch { } }
+      else if (m.t === 'folder') { const fn = pickQ.shift(); if (fn) try { fn(m.path || null); } catch { } }
+      else (evs[m.t] || []).forEach(fn => { try { fn(m); } catch { } });
     });
   } catch { }
 

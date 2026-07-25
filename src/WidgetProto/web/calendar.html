@@ -2,7 +2,8 @@
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="widget.css">
 <style>
-  /* 日历 · Small：红色星期 + 大日期数字 + 两条日程（macOS Calendar small 形态） */
+  /* 日历：Small = 红色星期 + 大日期 + 两条日程（演示数据——真实日程属账号级组件，B 批不做）；
+     Medium（≥300px 视口）= 左日期栏 + 右月历网格，今天红圈。 */
   :root { --tint: #FF453A; }
   .content { padding: 15px 16px; display: flex; flex-direction: column; }
   .dow { font-size: 12px; font-weight: 700; color: var(--tint); letter-spacing: .8px; }
@@ -12,19 +13,47 @@
   .dot { flex: 0 0 auto; width: 4px; height: 26px; border-radius: 2px; }
   .evt .t { font-size: 11.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .evt .s { font-size: 10.5px; color: var(--fg2); }
+  .month { display: none; }
+
+  @media (min-width: 300px) {
+    .content { flex-direction: row; gap: 18px; padding: 16px 18px; }
+    .left { display: flex; flex-direction: column; flex: 0 0 88px; }
+    .evts { display: none; }
+    .month { display: grid; flex: 1; grid-template-columns: repeat(7, 1fr);
+             grid-auto-rows: 1fr; align-items: center; justify-items: center; }
+    .month .hd { font-size: 9.5px; font-weight: 700; color: var(--fg2); }
+    .month .d { font-size: 11px; font-weight: 500; color: var(--fg);
+                width: 19px; height: 19px; line-height: 19px; text-align: center;
+                font-variant-numeric: tabular-nums; border-radius: 50%; }
+    .month .d.out { color: transparent; }
+    .month .d.today { background: var(--tint); color: #fff; font-weight: 700; }
+  }
 </style></head><body>
 <div class="card"><div class="content">
-  <div class="dow" id="dow">FRIDAY</div>
-  <div class="day w-big" id="day">17</div>
-  <div class="evts">
-    <div class="evt"><span class="dot" style="background:#0A84FF"></span><span><div class="t">产品评审</div><div class="s">14:00–15:00</div></span></div>
-    <div class="evt"><span class="dot" style="background:#30D158"></span><span><div class="t">健身</div><div class="s">19:30</div></span></div>
+  <div class="left">
+    <div class="dow" id="dow">FRIDAY</div>
+    <div class="day w-big" id="day">17</div>
+    <div class="evts">
+      <div class="evt"><span class="dot" style="background:#0A84FF"></span><span><div class="t">产品评审</div><div class="s">14:00–15:00</div></span></div>
+      <div class="evt"><span class="dot" style="background:#30D158"></span><span><div class="t">健身</div><div class="s">19:30</div></span></div>
+    </div>
   </div>
+  <div class="month" id="mo"></div>
 </div></div>
 <script>
   const n = new Date();
   document.getElementById('dow').textContent =
     ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][n.getDay()];
   document.getElementById('day').textContent = n.getDate();
+
+  // 月历（周一起始，中文习惯；跨月格留空）
+  const y = n.getFullYear(), m = n.getMonth();
+  const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;   // 周一=0
+  let html = ['一','二','三','四','五','六','日'].map(d => `<span class="hd">${d}</span>`).join('');
+  for (let i = 0; i < lead; i++) html += '<span class="d out"></span>';
+  for (let d = 1; d <= days; d++)
+    html += `<span class="d${d === n.getDate() ? ' today' : ''}">${d}</span>`;
+  document.getElementById('mo').innerHTML = html;
 </script>
 </body></html>

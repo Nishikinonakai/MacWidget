@@ -17,12 +17,18 @@ public sealed class WidgetWindow : Window
 
     public string Kind { get; }
     public string SizeClass { get; private set; }
+    /// <summary>组件实例配置（widget 自定形状，宿主只存取不解释）；null = 未配置过。</summary>
+    public System.Text.Json.JsonElement? Cfg { get; private set; }
+    /// <summary>photo 专用：当前生效的照片文件夹（PhotoSupport 维护，供流时查）。</summary>
+    public string? PhotoFolder { get; set; }
 
     /// <param name="size">尺寸档 s/m/l；null 或不支持 = kind 默认档（老档案兼容）</param>
     /// <param name="x">帧左上（DIU）；空 = 实验模式栅格位</param>
     /// <param name="lifted">出生即升层（面板拖出中的新组件，不先钉底）</param>
-    public WidgetWindow(int i, string kind, string? size = null, double? x = null, double? y = null, bool lifted = false)
+    public WidgetWindow(int i, string kind, string? size = null, double? x = null, double? y = null, bool lifted = false,
+                        System.Text.Json.JsonElement? cfg = null)
     {
+        Cfg = cfg;
         _i = i;
         Kind = kind;
         SizeClass = size != null && WidgetRegistry.SizesOf(kind).Contains(size)
@@ -131,7 +137,9 @@ public sealed class WidgetWindow : Window
     async Task Setup(CoreWebView2 core, string host)
     {
         _core = core;
-        core.SetVirtualHostNameToFolderMapping(host, Program.WebDir, CoreWebView2HostResourceAccessKind.Allow);
+        // photo 的源整个由宿主供流（Hook 里说明为什么不能用映射）；其余 kind 走文件夹映射
+        if (Kind != "photo")
+            core.SetVirtualHostNameToFolderMapping(host, Program.WebDir, CoreWebView2HostResourceAccessKind.Allow);
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
@@ -139,8 +147,10 @@ public sealed class WidgetWindow : Window
         {
             Program.Log($"widget {_i} ({Kind}) nav done ok={a.IsSuccess}");
             PushState(forcePost: true);   // 注入快照与导航之间的状态变化在这兜住
+            if (Kind == "photo") PhotoSupport.Apply(this, core, _i);
         };
         core.WebMessageReceived += OnWebMessage;
+        if (Kind == "photo") PhotoSupport.Hook(this, core, host);
         // 宿主运行时注入（拖拽/状态类/徽章/右键），组件作者零感知（产品同款设计）
         await core.AddScriptToExecuteOnDocumentCreatedAsync(HostJs());
     }
@@ -155,7 +165,8 @@ public sealed class WidgetWindow : Window
             : "";
         if (_hostJs.Length == 0) Program.Log("WARN host.js missing");
         var (dark, mono) = StateNow();
-        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")}}};\n" + _hostJs;
+        var cfgJson = Cfg is { } c ? c.GetRawText() : "null";
+        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")},cfg:{cfgJson}}};\n" + _hostJs;
     }
 
     (bool dark, bool mono) StateNow()
@@ -232,6 +243,10 @@ public sealed class WidgetWindow : Window
                 case "hello":
                     Program.Log($"widget {_i} ({Kind}) host.js alive");
                     break;
+                case "dbg":
+                    // 组件页 mw.log(...)（开发排障设施：页面无 console 出口，宿主日志是唯一喉舌）
+                    Program.Log($"widget {_i} ({Kind}) dbg: {root.GetProperty("m").GetString()}");
+                    break;
                 case "edit":
                     EditMode.Toggle();
                     break;
@@ -247,6 +262,25 @@ public sealed class WidgetWindow : Window
                     DataHub.Command(root.GetProperty("topic").GetString() ?? "",
                                     root.GetProperty("cmd").GetString() ?? "");
                     break;
+                case "cfg":
+                    // 页面 mw.saveCfg：存快照（Clone 脱离 JsonDocument 生命周期）→ 持久化 → kind 侧钩子
+                    Cfg = root.GetProperty("cfg").Clone();
+                    Layout.Save();
+                    Program.Log($"widget {_i} ({Kind}) cfg saved");
+                    if (Kind == "photo" && _core != null) PhotoSupport.Apply(this, _core, _i);
+                    break;
+                case "pickfolder":
+                {
+                    var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "选择照片文件夹" };
+                    if (Cfg is { ValueKind: System.Text.Json.JsonValueKind.Object } cc &&
+                        cc.TryGetProperty("folder", out var fp) && fp.GetString() is { Length: > 0 } cur &&
+                        System.IO.Directory.Exists(cur))
+                        dlg.InitialDirectory = cur;
+                    bool? ok = dlg.ShowDialog(this);
+                    PostJson(System.Text.Json.JsonSerializer.Serialize(
+                        new { t = "folder", path = ok == true ? dlg.FolderName : null }));
+                    break;
+                }
                 case "remove":
                     ByeAndClose();
                     break;

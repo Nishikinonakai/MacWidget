@@ -12,13 +12,17 @@ public static class WidgetRegistry
     /// <summary>kind 支持的尺寸档（macOS 语义：组件自报支持档）。</summary>
     public static string[] SizesOf(string kind) => kind switch
     {
-        "clock"   => new[] { "s", "m" },   // m = 世界时钟四表盘
-        "monitor" => new[] { "s", "m" },
-        "music"   => new[] { "s", "m" },
-        "weather" => new[] { "m" },
-        "photo"   => new[] { "l" },
-        _         => new[] { "s" },
+        "clock"    => new[] { "s", "m" },   // m = 世界时钟四表盘
+        "calendar" => new[] { "s", "m" },   // m = 月历网格
+        "monitor"  => new[] { "s", "m" },
+        "music"    => new[] { "s", "m" },
+        "weather"  => new[] { "m" },
+        "photo"    => new[] { "l" },
+        _          => new[] { "s" },
     };
+
+    /// <summary>有"编辑小组件"配置脸的 kind（菜单据此显示入口）。</summary>
+    public static bool Configurable(string kind) => kind is "photo";
 
     public static string DefaultSize(string kind) => kind switch
     {
@@ -43,8 +47,8 @@ public static class WidgetRegistry
 /// </summary>
 public static class Layout
 {
-    /// <summary>Size 为 null = 老档案（尺寸档之前），落到 kind 默认档。</summary>
-    public sealed record Entry(string Kind, double X, double Y, string? Size = null);
+    /// <summary>Size 为 null = 老档案（尺寸档之前），落到 kind 默认档；Cfg = 组件自定形状（宿主不解释）。</summary>
+    public sealed record Entry(string Kind, double X, double Y, string? Size = null, JsonElement? Cfg = null);
 
     static string PathOf => System.IO.Path.Combine(Program.BaseDir, "widgets.json");
     static string Key()
@@ -109,9 +113,13 @@ public static class Layout
             var list = new List<Entry>();
             foreach (Window w in Application.Current.Windows)
                 if (w is WidgetWindow ww && ww.IsVisible)
-                    list.Add(new Entry(ww.Kind, ww.Left, ww.Top, ww.SizeClass));
+                    list.Add(new Entry(ww.Kind, ww.Left, ww.Top, ww.SizeClass, ww.Cfg));
             doc[Key()] = list;
-            File.WriteAllText(PathOf, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(PathOf, JsonSerializer.Serialize(doc, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            }));
             Program.Log($"layout saved: {list.Count} widgets @ {Key()}");
         }
         catch (Exception ex) { Program.Log("layout save FAIL: " + ex.Message); }

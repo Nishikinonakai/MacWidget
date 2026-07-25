@@ -49,6 +49,13 @@ public sealed class MenuWindow : Window
         var fg = new SolidColorBrush(dark ? Color.FromRgb(0xF2, 0xF2, 0xF7) : Color.FromRgb(0x1D, 0x1D, 0x1F));
         var body = new StackPanel { Margin = new Thickness(5) };
 
+        // macOS 菜单序：编辑本组件（配置脸）→ 尺寸档 → 编辑小组件…（全局编辑模式）→ 移除
+        if (WidgetRegistry.Configurable(target.Kind))
+        {
+            body.Children.Add(Row("编辑「" + KindLabel(target.Kind) + "」", fg, check: false,
+                () => target.PostJson("""{"t":"editcfg"}""")));
+            body.Children.Add(Hairline(dark));
+        }
         var sizes = WidgetRegistry.SizesOf(target.Kind);
         if (sizes.Length > 1)
         {
@@ -109,6 +116,13 @@ public sealed class MenuWindow : Window
     }
 
     static string SizeLabel(string s) => s switch { "m" => "中", "l" => "大", _ => "小" };
+
+    static string KindLabel(string kind) => kind switch
+    {
+        "photo" => "照片", "clock" => "时钟", "calendar" => "日历",
+        "monitor" => "系统监视", "weather" => "天气", "music" => "正在播放", "battery" => "电池",
+        _ => kind,
+    };
 
     Border Row(string text, Brush normalFg, bool check, Action act)
     {

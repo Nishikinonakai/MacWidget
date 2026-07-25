@@ -58,7 +58,7 @@ public static class Program
                 {
                     // 产品模式：恢复本分辨率档的摆位（无档 = 默认演示组）
                     foreach (var it in Layout.LoadOrDefault())
-                        new WidgetWindow(NextId(), it.Kind, it.Size, it.X, it.Y).Show();
+                        new WidgetWindow(NextId(), it.Kind, it.Size, it.X, it.Y, cfg: it.Cfg).Show();
                 }
                 Log("all windows shown");
 

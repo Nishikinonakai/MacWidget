@@ -2,31 +2,145 @@
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="widget.css">
 <style>
-  /* 照片 · Large（360×360 帧 / 344×344 卡）：全出血图 + 左下角标（mono 下 saturate(0) 自动成黑白照） */
-  .img { position: absolute; inset: -8%;
+  /* 照片 · Large：文件夹轮播（宿主映射虚拟主机推清单）+ KenBurns 交叉淡入；
+     无图 = 星空占位脸；编辑小组件 = 卡片 3D 翻面到配置脸（macOS 同款）。
+     mono 下 saturate(0) 自动成黑白照。 */
+  :root { --tint: #FFD60A; }
+  .content { perspective: 1100px; }
+  .flip { position:absolute; inset:0; transform-style:preserve-3d;
+          transition:transform .55s cubic-bezier(.35,0,.25,1); }
+  html.cfgmode .flip { transform: rotateY(180deg); }
+  .face { position:absolute; inset:0; backface-visibility:hidden; border-radius:inherit; overflow:hidden; }
+  .back { transform: rotateY(180deg); background: var(--card-bg); }
+
+  /* ---- 正面：轮播 ---- */
+  .ph { position:absolute; inset:-6%; background-size:cover; background-position:center;
+        opacity:0; transition:opacity 1s ease; }
+  .ph.on { opacity:1; }
+  .ph.kb { animation: kenburns 24s ease-in-out infinite alternate; }
+  @keyframes kenburns { from { transform: scale(1) } to { transform: scale(1.09) translate(1.4%, -1.4%) } }
+
+  /* 占位脸（无图）：原星空卡 + 提示 */
+  .art { position:absolute; inset:-8%;
     background:
       radial-gradient(ellipse 60% 42% at 28% 74%, #FF9166 0%, transparent 62%),
       radial-gradient(ellipse 66% 55% at 76% 22%, #8A6CFF 0%, transparent 64%),
       radial-gradient(ellipse 120% 46% at 50% 102%, #17325C 0%, transparent 70%),
       linear-gradient(180deg, #0E1B38 0%, #23386B 52%, #0A1128 100%);
     animation: kenburns 26s ease-in-out infinite alternate; }
-  @keyframes kenburns { from { transform: scale(1) } to { transform: scale(1.1) translate(1.6%, -1.6%) } }
-  .stars { position: absolute; inset: 0; }
-  .stars i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: rgba(255,255,255,.85); }
-  .cap { position: absolute; left: 16px; bottom: 13px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
-  .cap b { font-size: 15px; font-weight: 600; display: block; }
-  .cap span { font-size: 12px; opacity: .85; }
+  .stars { position:absolute; inset:0; }
+  .stars i { position:absolute; width:2px; height:2px; border-radius:50%; background:rgba(255,255,255,.85); }
+  .hint { position:absolute; left:16px; right:16px; bottom:13px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.55); }
+  .hint b { font-size:14px; font-weight:600; display:block; }
+  .hint span { font-size:11px; opacity:.8; }
+  html:not(.nophotos) .empty-face { display:none; }
+  html.nophotos .live-face { display:none; }
+
+  /* ---- 背面：配置脸 ---- */
+  .back { display:flex; flex-direction:column; padding:18px 18px 14px; }
+  .back h3 { font-size:15px; font-weight:600; color:var(--fg); margin-bottom:14px; }
+  .back label { font-size:11.5px; font-weight:600; color:var(--fg2); letter-spacing:.4px; margin-bottom:6px; }
+  .folder { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+  .folder .path { flex:1; min-width:0; font-size:12px; color:var(--fg); background:var(--hairline);
+                  border-radius:7px; padding:7px 9px; white-space:nowrap; overflow:hidden;
+                  text-overflow:ellipsis; direction:rtl; text-align:left; }
+  .btn { flex:0 0 auto; font-size:12px; font-weight:600; color:var(--fg); background:var(--hairline);
+         border-radius:7px; padding:7px 12px; cursor:pointer; transition:filter .12s ease; }
+  .btn:hover { filter:brightness(1.25); }
+  .btn:active { transform:scale(.96); }
+  .segs { display:flex; gap:6px; margin-bottom:8px; }
+  .seg { flex:1; text-align:center; font-size:12px; font-weight:600; color:var(--fg2);
+         background:var(--hairline); border-radius:7px; padding:6px 0; cursor:pointer; }
+  .seg.on { background:#0A84FF; color:#fff; }
+  .done-row { margin-top:auto; display:flex; justify-content:flex-end; }
+  .done { font-size:12.5px; font-weight:600; color:#fff; background:#0A84FF;
+          border-radius:8px; padding:7px 22px; cursor:pointer; }
+  .done:active { transform:scale(.96); }
 </style></head><body>
 <div class="card"><div class="content">
-  <div class="img"></div>
-  <div class="stars" id="st"></div>
-  <div class="cap"><b>回忆</b><span>2026年7月13日 · 杭州</span></div>
+  <div class="flip">
+    <div class="face front">
+      <div class="live-face"><div class="ph" id="p0"></div><div class="ph" id="p1"></div></div>
+      <div class="empty-face">
+        <div class="art"></div>
+        <div class="stars" id="st"></div>
+        <div class="hint"><b>照片</b><span>右键 → 编辑「照片」选择文件夹</span></div>
+      </div>
+    </div>
+    <div class="face back">
+      <h3>照片</h3>
+      <label>文件夹</label>
+      <div class="folder">
+        <div class="path" id="path">（图片）</div>
+        <div class="btn" id="pick">选择…</div>
+      </div>
+      <label>轮换间隔</label>
+      <div class="segs" id="segs"></div>
+      <div class="done-row"><div class="done" id="done">完成</div></div>
+    </div>
+  </div>
 </div></div>
 <script>
-  const st = document.getElementById('st');
+  const H = document.documentElement, $ = id => document.getElementById(id);
+  H.classList.add('nophotos');
   let h = '';
   for (let i = 0; i < 26; i++)
     h += `<i style="left:${(Math.random()*94+3).toFixed(1)}%;top:${(Math.random()*46+3).toFixed(1)}%;opacity:${(Math.random()*.6+.25).toFixed(2)}"></i>`;
-  st.innerHTML = h;
+  $('st').innerHTML = h;
+
+  // ---- 轮播（图走同源 __photos/*，宿主 WebResourceRequested 供流）----
+  let files = [], idx = 0, front = 0, timer = 0;
+  const layers = [$('p0'), $('p1')];
+  const url = n => '__photos/' + encodeURIComponent(n);
+  function show(n, first) {
+    const back = 1 - front;
+    const img = new Image();
+    img.onload = () => {
+      layers[back].style.backgroundImage = `url("${url(n)}")`;
+      layers[back].classList.add('on', 'kb');
+      layers[front].classList.remove('on');
+      front = back;
+    };
+    img.onerror = e => window.mw?.log('img FAIL ' + url(n));
+    img.src = url(n);
+    if (first) { layers[back].classList.add('kb'); }
+  }
+  function tickPhoto() { if (!files.length) return; idx = (idx + 1) % files.length; show(files[idx]); }
+  function restartTimer() {
+    clearInterval(timer);
+    const iv = ((window.mw?.cfg() || {}).interval || 8) * 1000;
+    timer = setInterval(tickPhoto, iv);
+  }
+  window.mw?.on('photos', m => {
+    files = m.files || [];
+    $('path').textContent = m.folder || '（图片）';
+    H.classList.toggle('nophotos', files.length === 0);
+    if (files.length) { idx = 0; show(files[0], true); restartTimer(); }
+  });
+
+  // ---- 配置脸 ----
+  const IVS = [5, 8, 15, 30];
+  function renderSegs() {
+    const cur = (window.mw?.cfg() || {}).interval || 8;
+    $('segs').innerHTML = IVS.map(v =>
+      `<div class="seg${v === cur ? ' on' : ''}" data-v="${v}">${v} 秒</div>`).join('');
+  }
+  renderSegs();
+  $('segs').addEventListener('click', e => {
+    const s = e.target.closest('.seg'); if (!s) return;
+    const c = window.mw?.cfg() || {};
+    c.interval = +s.dataset.v;
+    window.mw?.saveCfg(c);
+    renderSegs(); restartTimer();
+  });
+  $('pick').addEventListener('click', () => {
+    window.mw?.pickFolder(p => {
+      if (!p) return;
+      const c = window.mw?.cfg() || {};
+      c.folder = p;
+      window.mw?.saveCfg(c);   // 宿主随即重映射并重推 photos 清单
+    });
+  });
+  $('done').addEventListener('click', () => window.mw?.exitCfg());
 </script>
 </body></html>
