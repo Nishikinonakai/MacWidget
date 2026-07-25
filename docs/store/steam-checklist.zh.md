@@ -26,7 +26,8 @@
 - 构建打包：GitHub Actions 已在 Windows runner 发布 x64、校验微软签名的 WebView2 引导器、用 Inno
   打出私有 Artifact（保留 14 天）。每份 Artifact 含安装器、同名 `.sha256` 与校验 PowerShell 脚本，供 Beta
   手动升级前验证完整性；并解析已安装版冒烟脚本、强制其保持 Windows PowerShell 5.1 可加载的 ASCII 源码；
-  不会自动创建 GitHub Release。Steam 侧待 App ID 就绪后接入 steamcmd/steampipe 脚本。
+  不会自动创建 GitHub Release。SteamPipe VDF 生成器和操作说明已备好，见
+  [SteamPipe 上传准备](steampipe.zh.md)；待 App ID、Depot ID 和构建账号就绪后执行上传。
 
 ## 发布前工程状态（2026-07-26）
 

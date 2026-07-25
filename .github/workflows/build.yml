@@ -50,7 +50,7 @@ jobs:
       - name: Validate Windows operational scripts
         shell: pwsh
         run: |
-          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\verify-installer.ps1')) {
+          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\verify-installer.ps1', 'tools\prepare-steampipe.ps1')) {
             $script = Join-Path $env:GITHUB_WORKSPACE $relativePath
             $tokens = $null
             $errors = $null
