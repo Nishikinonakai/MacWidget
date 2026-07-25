@@ -25,9 +25,14 @@ public static class Program
             SingleInstance.SignalQuit();
             return 0;
         }
-        if (!SingleInstance.TryAcquire())
+        if (Opts.RestartChild)
         {
-            if (Opts.EditOnStartup) MacDeskCommands.RequestEditor();
+            if (!SingleInstance.TryAcquireForRestart(TimeSpan.FromSeconds(10))) return 1;
+        }
+        else if (!SingleInstance.TryAcquire())
+        {
+            if (Opts.Restart) SingleInstance.SignalRestart();
+            else if (Opts.EditOnStartup) MacDeskCommands.RequestEditor();
             return 0;
         }
 
@@ -38,13 +43,19 @@ public static class Program
         Log($"    raw cmdline: {Environment.CommandLine}");
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        app.Exit += (_, _) => Tray.Uninstall();
+        app.Exit += (_, _) =>
+        {
+            TopologyWatcher.Stop();
+            Tray.Uninstall();
+        };
         app.DispatcherUnhandledException += (_, e) => { Log("UNHANDLED: " + e.Exception); e.Handled = true; };
         SingleInstance.StartQuitListener();
+        SingleInstance.StartRestartListener();
         app.Startup += async (_, _) =>
         {
             try
             {
+                await TopologyWatcher.WaitForStableTopologyAsync();
                 ProductSettings.Load();
                 Autostart.EnsureConfigured();
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
@@ -96,6 +107,7 @@ public static class Program
                 var beat = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
                 beat.Tick += (_, _) => WidgetLink.Send(force: true);
                 beat.Start();
+                TopologyWatcher.Start();
             }
             catch (Exception ex)
             {

@@ -119,6 +119,14 @@ public static class Layout
         _debounce.Stop(); _debounce.Start();
     }
 
+    /// <summary>显示拓扑交接/退出前必须同步落盘，不能等 500ms 防抖计时器。</summary>
+    public static void SaveImmediately()
+    {
+        if (Program.Opts.LabMode) return;
+        _debounce?.Stop();
+        SaveNow();
+    }
+
     static System.Windows.Threading.DispatcherTimer MakeTimer()
     {
         var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
