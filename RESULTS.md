@@ -43,6 +43,25 @@ WebView2 Runtime 150.0.4078.65，.NET 10.0.2，机主系统设置 **透明效果
 - ✅ 无边框全屏窗完全盖住组件，零穿透零闪烁；关闭后组件完好。
 - ✅ 与 WE 动态壁纸 + MacDesk 透明直通全程共存无冲突。
 
+## E4 正式安装包回归（2026-07-26，home-win 真机）
+
+工件为私有 CI run `30166713335` 的 `MacWidget-Setup-v0.2.0-ci.17.exe`，对应源码
+`854451c`。在安装前使用工件随附的 `Verify-MacWidgetInstaller.ps1` 校验文件名与 SHA-256，
+结果通过；安装器大小为 59,161,904 bytes。
+
+| 检查项 | 结果 |
+|---|---|
+| 旧正式版升级到 CI.17 | ✅ 安装完成；安装目录版本为 `0.2.0-ci.17+854451c...` |
+| 自包含 .NET | ✅ `coreclr.dll`、`hostfxr.dll`、`hostpolicy.dll` 均在安装目录 |
+| 启动与单实例 | ✅ `--restart` PID 切换后只保留一个进程；安装后首次启动也通过 |
+| WebView2 / 托盘 / MacDesk | ✅ Runtime 就绪、托盘就绪，且 `widgetlink connected to MacDesk` 出现在本次启动日志 |
+| 天气与许可通知 | ✅ MET Norway 请求 HTTP 200；安装目录包含完整 `THIRD-PARTY-NOTICES.md` |
+| 数据保留 | ✅ 同版本静默重装退出码 `0`，`settings.json`、`layout.json` SHA-256 均未变化 |
+
+这次回归也收紧了 `tools/smoke-installed.ps1`：它会断言安装目录的自包含运行时与预期版本，
+并在限定时间内只接受最近一次启动后的 WebView2、托盘和 MacDesk 就绪信号。这样可避免旧日志或
+进程刚创建时的启动竞态造成误通过或误失败。
+
 ## 结论：架构定案输入
 
 **C# WPF 宿主 + 共享 CoreWebView2Environment(--process-per-site) + hwnd WebView2 控件（DefaultBackgroundColor=Transparent）
