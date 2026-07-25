@@ -76,6 +76,7 @@ NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 
 commit 信息版本。该检查同时确认安装目录带有 `coreclr.dll`、`hostfxr.dll` 和 `hostpolicy.dll`，而不是
 意外依赖测试机预装的 .NET。WebView2、托盘和 MacDesk 管道信号必须出现在最近一次 `=== start:`
 启动标记之后，旧会话日志不能使本次启动误通过。
+脚本会在 `ReadyTimeoutSeconds` 内轮询这些信号；首次安装或升级后可把该值提高到 `60`。
 
 从私有 CI artifact 取得 Beta 安装器时，其中已含同名 `.sha256` 与 `Verify-MacWidgetInstaller.ps1`；安装前在
 解压目录执行以下命令核验。文件名与散列必须同时匹配，任一不符都会失败退出：

@@ -72,20 +72,32 @@ $logPath = Join-Path $env:LOCALAPPDATA 'MacWidget\macwidget.log'
 if (-not (Test-Path -LiteralPath $logPath -PathType Leaf)) {
     throw "Startup log was not found: $logPath"
 }
-$logTail = @(Get-Content -LiteralPath $logPath -Tail 2000 -ErrorAction Stop)
-$startupIndexes = @(
-    for ($index = 0; $index -lt $logTail.Count; $index++) {
-        if ($logTail[$index] -like '*=== start:*') { $index }
+$webViewReady = $false
+$trayReady = $false
+$macDeskLinked = $false
+$currentStartupLog = @()
+$startupIndexes = @()
+$logDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
+do {
+    $logTail = @(Get-Content -LiteralPath $logPath -Tail 2000 -ErrorAction Stop)
+    $startupIndexes = @(
+        for ($index = 0; $index -lt $logTail.Count; $index++) {
+            if ($logTail[$index] -like '*=== start:*') { $index }
+        }
+    )
+    if ($startupIndexes.Count -gt 0) {
+        $lastStartupIndex = $startupIndexes[-1]
+        $currentStartupLog = @($logTail[$lastStartupIndex..($logTail.Count - 1)])
+        $webViewReady = @($currentStartupLog | Where-Object { $_ -like '*webview2 env ready*' }).Count -gt 0
+        $trayReady = @($currentStartupLog | Where-Object { $_ -like '*tray ready*' }).Count -gt 0
+        $macDeskLinked = @($currentStartupLog | Where-Object { $_ -like '*widgetlink connected to MacDesk*' }).Count -gt 0
     }
-)
+    $ready = $webViewReady -and $trayReady -and ((-not $RequireMacDeskLink) -or $macDeskLinked)
+    if (-not $ready -and (Get-Date) -lt $logDeadline) { Start-Sleep -Milliseconds 250 }
+} while (-not $ready -and (Get-Date) -lt $logDeadline)
 if ($startupIndexes.Count -eq 0) {
     throw 'The startup log has no MacWidget start marker.'
 }
-$lastStartupIndex = $startupIndexes[-1]
-$currentStartupLog = @($logTail[$lastStartupIndex..($logTail.Count - 1)])
-$webViewReady = @($currentStartupLog | Where-Object { $_ -like '*webview2 env ready*' }).Count -gt 0
-$trayReady = @($currentStartupLog | Where-Object { $_ -like '*tray ready*' }).Count -gt 0
-$macDeskLinked = @($currentStartupLog | Where-Object { $_ -like '*widgetlink connected to MacDesk*' }).Count -gt 0
 if (-not $webViewReady) { throw 'The startup log has no WebView2-ready signal.' }
 if (-not $trayReady) { throw 'The startup log has no tray-ready signal.' }
 if ($RequireMacDeskLink -and -not $macDeskLinked) {
