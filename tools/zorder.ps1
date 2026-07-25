@@ -27,7 +27,7 @@ while ($h -ne [IntPtr]::Zero -and $i -lt 400) {
         $w = $rc.r - $rc.l; $ht = $rc.b - $rc.t
         if ($w -gt 0 -and $ht -gt 0) {
             $mark = ''
-            if ($ttl.ToString() -like 'WidgetProto*') { $mark = '  <<<< WIDGET' }
+            if ($ttl.ToString() -like 'MacWidget*' -or $ttl.ToString() -like 'WidgetProto*') { $mark = '  <<<< WIDGET' }
             "{0,3} {1,-38} {2,-24} pid={3,-6} {4} [{5},{6} {7}x{8}]{9}" -f `
                 $i, $cls.ToString(), ($ttl.ToString().Substring(0, [Math]::Min(24, $ttl.Length))), `
                 $wpid, $pname, $rc.l, $rc.t, $w, $ht, $mark

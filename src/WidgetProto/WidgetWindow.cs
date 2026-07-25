@@ -40,7 +40,7 @@ public sealed class WidgetWindow : Window
         ShowInTaskbar = false;
         ShowActivated = !Program.Opts.NoActivate;
         Background = Brushes.Transparent;
-        Title = $"WidgetProto {i} {kind}";
+        Title = $"MacWidget {i} {kind}";
 
         // 窗口 = 帧（摆放/避让/组格距的原子单位）；可视卡由页面 CSS 画（内衬 8、圆角 20、阴影）
         (Width, Height) = WidgetRegistry.Size(kind, SizeClass);

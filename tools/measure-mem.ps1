@@ -1,7 +1,7 @@
-# 采样 WidgetProto 全进程树内存（host + 匹配本原型 udf 的 msedgewebview2 全家）
+# 采样 MacWidget 全进程树内存（host + 匹配本产品 udf 的 msedgewebview2 全家）
 # 输出：总计行 + 按 WS 降序的每进程明细。WS=工作集，Priv=私有提交。
 $procs = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq 'WidgetProto.exe' -or
+    $_.Name -eq 'MacWidget.exe' -or $_.Name -eq 'WidgetProto.exe' -or
     ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*widgetproto*')
 }
 $rows = @()

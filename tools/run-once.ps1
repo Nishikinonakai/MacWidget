@@ -14,13 +14,13 @@ param(
 )
 $root = 'C:\work\widgetproto'
 
-Stop-Process -Name WidgetProto -Force -ErrorAction SilentlyContinue
+Stop-Process -Name MacWidget,WidgetProto -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
     Where-Object { $_.CommandLine -like '*widgetproto*' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
-Start-Process -FilePath "$root\app\WidgetProto.exe" `
+Start-Process -FilePath "$root\app\MacWidget.exe" `
     -ArgumentList "--n $N --control $Control --backdrop $Backdrop --origin $Origin --pin $Pin --widget $Widget --glass $Glass" `
     -WorkingDirectory "$root\app"
 Start-Sleep -Seconds $SettleSec
@@ -32,6 +32,6 @@ for ($i = 0; $i -lt $Samples; $i++) {
 }
 
 if (-not $KeepAlive) {
-    Stop-Process -Name WidgetProto -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name MacWidget,WidgetProto -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 }

@@ -42,7 +42,8 @@ public static class WidgetRegistry
 
 /// <summary>
 /// 布局持久化：按"工作区 DIU 尺寸"分档（对齐 macOS DesktopWidgetPlacementStorage 按显示器×分辨率分档
-/// 的语义——同机 1080p@100% 与 4K@300% 的 DIU 不同，各存各的档）。widgets.json 在 exe 旁。
+/// 的语义——同机 1080p@100% 与 4K@300% 的 DIU 不同，各存各的档）。widgets.json 在
+/// %LOCALAPPDATA%\MacWidget，避免应用升级覆盖用户布局；首次产品化启动会从旧 exe 旁迁移。
 /// 实验模式（--n/--widget）不读不写，保护机主的正式摆位。
 /// </summary>
 public static class Layout
@@ -50,7 +51,8 @@ public static class Layout
     /// <summary>Size 为 null = 老档案（尺寸档之前），落到 kind 默认档；Cfg = 组件自定形状（宿主不解释）。</summary>
     public sealed record Entry(string Kind, double X, double Y, string? Size = null, JsonElement? Cfg = null);
 
-    static string PathOf => System.IO.Path.Combine(Program.BaseDir, "widgets.json");
+    static string PathOf => System.IO.Path.Combine(Program.DataDir, "widgets.json");
+    static string LegacyPath => System.IO.Path.Combine(Program.BaseDir, "widgets.json");
     static string Key()
     {
         var wa = SystemParameters.WorkArea;
@@ -61,6 +63,11 @@ public static class Layout
     {
         try
         {
+            if (!File.Exists(PathOf) && File.Exists(LegacyPath))
+            {
+                File.Copy(LegacyPath, PathOf);
+                Program.Log("layout migrated from app directory");
+            }
             if (File.Exists(PathOf))
             {
                 var doc = JsonSerializer.Deserialize<Dictionary<string, List<Entry>>>(File.ReadAllText(PathOf));

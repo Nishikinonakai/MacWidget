@@ -1,6 +1,7 @@
-# WidgetProto — MacWidget 技术原型
+# MacWidget — Windows 桌面小组件
 
-MacWidget（Windows 上的 macOS 风格桌面小组件，规划中的付费产品）立项前的三项技术验证：
+MacWidget（Windows 上的 macOS 风格桌面小组件，规划中的付费产品）以 C# + WebView2 实现；
+本仓库保留了立项时的三项技术验证记录：
 
 1. **内存**：C# 宿主 + 共享 CoreWebView2Environment，N 个 web 组件的内存曲线与边际成本；
 2. **视觉**：宿主窗口 DWM 云母/亚克力（公开 API `DWMWA_SYSTEMBACKDROP_TYPE`）+ 透明背景 WebView2 的叠加效果；
@@ -59,7 +60,7 @@ AddScriptToExecuteOnDocumentCreated 的注入快照是注册时冻结的——cf
 ## 命令行
 
 ```
-WidgetProto.exe --n 4 --control comp --backdrop acrylic --origin same --pin bottom --widget mixed
+MacWidget.exe --n 4 --control comp --backdrop acrylic --origin same --pin bottom --widget mixed
   --control  hwnd | comp | native     comp=WebView2CompositionControl（本命方案）
   --backdrop none | mica | acrylic | tabbed
   --origin   same | multi             multi=每组件独立 site，强制拆 renderer
@@ -69,4 +70,4 @@ WidgetProto.exe --n 4 --control comp --backdrop acrylic --origin same --pin bott
   --light / --activate                浅色 / 允许抢焦点
 ```
 
-与 MacDesk 完全独立的代码库；将来 MacWidget 若立项，此仓库只作技术档案，不直接演化成产品。
+与 MacDesk 完全独立的代码库；正式安装版将用户状态保存在 `%LOCALAPPDATA%\MacWidget`。

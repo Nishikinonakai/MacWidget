@@ -29,7 +29,7 @@ public sealed class PanelWindow : Window
         ShowActivated = true;      // 搜索框要键盘
         Topmost = true;
         Background = Brushes.Transparent;
-        Title = "WidgetProto Panel";
+        Title = "MacWidget Panel";
         WindowStartupLocation = WindowStartupLocation.Manual;
 
         SourceInitialized += (_, _) =>

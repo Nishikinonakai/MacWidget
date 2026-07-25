@@ -10,6 +10,8 @@ public static class Program
     public static CoreWebView2Environment? Env;
     public static readonly string BaseDir = AppContext.BaseDirectory;
     public static readonly string WebDir = Path.Combine(AppContext.BaseDirectory, "web");
+    public static readonly string DataDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacWidget");
 
     static int _nextId;
     public static int NextId() => _nextId++;
@@ -18,17 +20,33 @@ public static class Program
     public static int Main(string[] args)
     {
         Opts = Options.Parse(args);
+        if (Opts.Quit)
+        {
+            SingleInstance.SignalQuit();
+            return 0;
+        }
+        if (!SingleInstance.TryAcquire())
+        {
+            if (Opts.EditOnStartup) MacDeskCommands.RequestEditor();
+            return 0;
+        }
+
+        Directory.CreateDirectory(DataDir);
         Log($"=== start: lab={Opts.LabMode} n={Opts.N} control={Opts.Control} backdrop={Opts.Backdrop} " +
             $"origin={Opts.Origin} pin={Opts.Pin} widget={Opts.Widget} glass={Opts.Glass} style={Opts.Style} " +
             $"procpersite={Opts.ProcPerSite} noactivate={Opts.NoActivate}");
         Log($"    raw cmdline: {Environment.CommandLine}");
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Exit += (_, _) => Tray.Uninstall();
         app.DispatcherUnhandledException += (_, e) => { Log("UNHANDLED: " + e.Exception); e.Handled = true; };
+        SingleInstance.StartQuitListener();
         app.Startup += async (_, _) =>
         {
             try
             {
+                ProductSettings.Load();
+                Autostart.EnsureConfigured();
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
                 DataHub.Register(new MusicProvider());
                 DataHub.Register(new BatteryProvider());
@@ -67,7 +85,7 @@ public static class Program
                 Tray.Install();      // 托盘：编辑/退出入口
                 MacDeskCommands.Start();
                 if (Opts.EditOnStartup)
-                    Application.Current.Dispatcher.BeginInvoke(EditMode.Enter);
+                    _ = Application.Current.Dispatcher.BeginInvoke(EditMode.Enter);
 
                 // MacDesk 联动：初始占用矩形（等一拍让窗口全部落位）+ 3s 心跳
                 // （心跳兜住 MacDesk 重启后的重连——管道断开时对方已清空，重连即恢复避让）
@@ -88,12 +106,20 @@ public static class Program
     }
 
     static readonly object _logLock = new();
+
+    public static void RequestShutdown()
+    {
+        Tray.Uninstall();
+        Application.Current.Shutdown();
+    }
+
     public static void Log(string msg)
     {
         try
         {
+            Directory.CreateDirectory(DataDir);
             lock (_logLock)
-                File.AppendAllText(Path.Combine(BaseDir, "proto.log"),
+                File.AppendAllText(Path.Combine(DataDir, "macwidget.log"),
                     $"{DateTime.Now:HH:mm:ss.fff} {msg}\r\n");
         }
         catch { /* 日志失败不致命 */ }

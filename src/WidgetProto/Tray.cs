@@ -4,7 +4,7 @@ using System.Windows;
 namespace WidgetProto;
 
 /// <summary>
-/// 托盘常驻入口：编辑小组件… / 退出（原型先能用——机主日常跑这台机，不该靠 taskkill 退出）。
+/// 托盘常驻入口：编辑小组件… / 自启 / 退出。
 /// 图标运行期自画（渐变圆角块 + W），正式图标与 WPF 弹层菜单产品期再换。
 /// </summary>
 public static class Tray
@@ -16,21 +16,42 @@ public static class Tray
         _icon = new System.Windows.Forms.NotifyIcon
         {
             Icon = MakeIcon(),
-            Text = "MacWidget（原型）",
+            Text = "MacWidget",
             Visible = true,
         };
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("编辑小组件…", null, (_, _) =>
             Application.Current.Dispatcher.BeginInvoke(EditMode.Enter));
+        var autostart = new System.Windows.Forms.ToolStripMenuItem("开机启动")
+        {
+            Checked = Autostart.IsEnabled(),
+            CheckOnClick = false,
+        };
+        autostart.Click += (_, _) =>
+        {
+            bool next = !Autostart.IsEnabled();
+            bool ok = Autostart.SetEnabled(next);
+            autostart.Checked = ok && next;
+            if (!ok) Program.Log("autostart toggle failed");
+        };
+        menu.Items.Add(autostart);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            _icon!.Visible = false;
-            Application.Current.Shutdown();
+            Program.RequestShutdown();
         }));
         _icon.ContextMenuStrip = menu;
         _icon.DoubleClick += (_, _) => Application.Current.Dispatcher.BeginInvoke(EditMode.Toggle);
         Program.Log("tray ready");
+    }
+
+    public static void Uninstall()
+    {
+        try
+        {
+            if (_icon != null) { _icon.Visible = false; _icon.Dispose(); _icon = null; }
+        }
+        catch { }
     }
 
     static Icon MakeIcon()

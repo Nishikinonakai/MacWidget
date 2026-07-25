@@ -22,7 +22,7 @@ public sealed class GhostWindow : Window
         ShowInTaskbar = false;
         ShowActivated = false;
         Background = Brushes.Transparent;
-        Title = "WidgetProto Ghost";
+        Title = "MacWidget Ghost";
         // macOS 实测虚影形态：细白描边圆角矩形、几乎无填充（exp1/exp2-mid 截图）；
         // 与卡同几何：帧内衬 8、圆角 20
         Content = new Border

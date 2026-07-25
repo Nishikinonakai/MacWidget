@@ -44,7 +44,7 @@
 - **截图**：`GET http://IP:18800/screen` → PNG（物理分辨率 4096×2160）。
 - **别注入输入**：机主 PowerToys 全家以管理员常驻，合成输入会被 UIPI 静默丢弃。本测试计划已避开
   （ToggleDesktop 用 COM，全屏窗用自灭脚本）。
-- **机主随时可能在用机**：动手前查 idle（GetLastInputInfo）> 3 分钟；测完杀干净 WidgetProto 全家。
+- **机主随时可能在用机**：动手前查 idle（GetLastInputInfo）> 3 分钟；测完杀干净 MacWidget 全家。
 - 机器常态：4K@300%，Wallpaper Engine + MacDesk v1.5.0（透明直通模式）都在跑——保持原样，这就是目标环境。
 
 ## 构建与部署（Mac 侧）
@@ -70,7 +70,7 @@ E3: zorder ___ / 焦点 ___ / ToggleDesktop ___ / 全屏 ___ / WE 共存 ___
 ## 清场
 
 ```powershell
-Stop-Process -Name WidgetProto -Force -ErrorAction SilentlyContinue
+Stop-Process -Name MacWidget,WidgetProto -Force -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
   Where-Object { $_.CommandLine -like '*widgetproto*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

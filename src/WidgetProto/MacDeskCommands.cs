@@ -28,4 +28,15 @@ public static class MacDeskCommands
         worker.Start();
         Program.Log("MacDesk edit command ready");
     }
+
+    public static bool RequestEditor()
+    {
+        try
+        {
+            using var evt = EventWaitHandle.OpenExisting(EditWidgetsEventName);
+            return evt.Set();
+        }
+        catch (WaitHandleCannotBeOpenedException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
 }

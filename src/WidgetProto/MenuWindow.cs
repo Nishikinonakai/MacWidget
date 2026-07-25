@@ -43,7 +43,7 @@ public sealed class MenuWindow : Window
         Background = Brushes.Transparent;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = x - Pad; Top = y - Pad;
-        Title = "WidgetProto Menu";
+        Title = "MacWidget Menu";
 
         bool dark = ColorMode.Dark;
         var fg = new SolidColorBrush(dark ? Color.FromRgb(0xF2, 0xF2, 0xF7) : Color.FromRgb(0x1D, 0x1D, 0x1F));

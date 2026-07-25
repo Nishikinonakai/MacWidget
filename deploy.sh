@@ -11,7 +11,7 @@ env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u al
 
 ssh "nakai@$IP" "cmd /c (if not exist C:\\work\\widgetproto\\app mkdir C:\\work\\widgetproto\\app) & (if not exist C:\\work\\widgetproto\\tools mkdir C:\\work\\widgetproto\\tools)"
 # 目标机上可能还在跑：先杀（否则文件锁让 scp Failure）
-ssh "nakai@$IP" "cmd /c taskkill /f /im WidgetProto.exe 2>nul & exit /b 0"
+ssh "nakai@$IP" "cmd /c taskkill /f /im MacWidget.exe 2>nul & taskkill /f /im WidgetProto.exe 2>nul & exit /b 0"
 scp -r publish/* "nakai@$IP:C:/work/widgetproto/app/"
 scp tools/*.ps1 "nakai@$IP:C:/work/widgetproto/tools/"
 echo "OK -> $IP C:\\work\\widgetproto"
