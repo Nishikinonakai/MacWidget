@@ -1,73 +1,66 @@
-# MacWidget — Windows 桌面小组件
+# MacWidget
 
-MacWidget（Windows 上的 macOS 风格桌面小组件，规划中的付费产品）以 C# + WebView2 实现；
-本仓库保留了立项时的三项技术验证记录：
+MacWidget 是 Windows 桌面小组件应用：把时钟、日历、天气、系统状态、正在播放、照片和电池状态
+放在桌面上，自由摆放并随桌面状态自动调整外观。它是原生 C# / WPF 宿主，组件界面使用 WebView2
+渲染；不依赖 Electron，也不需要账号。
 
-1. **内存**：C# 宿主 + 共享 CoreWebView2Environment，N 个 web 组件的内存曲线与边际成本；
-2. **视觉**：宿主窗口 DWM 云母/亚克力（公开 API `DWMWA_SYSTEMBACKDROP_TYPE`）+ 透明背景 WebView2 的叠加效果；
-3. **贴底**：`HWND_BOTTOM` + `WM_WINDOWPOSCHANGING` 贴桌面层（不碰 WorkerW）与全屏应用/桌面操作的相处。
+当前处于可安装的 Beta 收口阶段。发布准备状态见
+[Steam 上架清单](docs/store/steam-checklist.zh.md)。
 
-结论直接决定 MacWidget 用不用「WPF 宿主 + WebView2（组件=HTML/CSS/JS）」这条架构。
-测试步骤、home-win 操作手册、结果模板见 **[TESTPLAN.md](TESTPLAN.md)**。
+## 功能
 
-## 结构
+- **七种组件**：时钟、日历、天气、系统监视、正在播放、照片轮播、电池。
+- **桌面级交互**：右键组件可改尺寸、配置或移除；进入“编辑小组件”后可从组件库拖出新组件。
+- **真实数据**：系统状态、媒体会话和电池在本机读取；天气直接请求 MET Norway 的公开服务。
+- **自动外观**：跟随系统明暗主题；普通窗口覆盖当前显示器时，组件自动变为低调单色。
+- **节能与多屏**：完全被普通窗口遮挡的组件会挂起 WebView2 与数据采样；布局按显示器标识和分辨率保存，
+  显示器变化后安全交接。
+- **托盘入口**：正式图标、原生 WPF 浮层、编辑组件、自启开关和退出。
+- **可选 MacDesk 联动**：MacDesk 可避让组件占用区域；桌面右键的 “Edit Widgets…” 会打开组件库。
 
-```
-src/WidgetProto/        net10.0-windows WPF 宿主（无 XAML，代码构 UI）
-  Program.cs            入口 + 共享 WebView2 环境 + 日志(proto.log)
-  WidgetWindow.cs       组件窗：无边框/透明直通/材质/贴底/不抢焦点
-  DataHub.cs            宿主→组件数据桥（订阅者门控采样 + 信封协议）
-  SysMon.cs             sysmon 数据源（CPU/内存/磁盘/GPU 真实计数器）
-  MenuWindow.cs         组件右键菜单（尺寸档/编辑/移除，纯 WPF 弹层）
-  Native.cs             DWM + BottomPin + 计数器 P/Invoke
-  web/*.html            五个组件（时钟/日历/系统监视/天气/照片）
-tools/*.ps1             home-win 侧：内存采样、单轮矩阵、z 序 dump
-deploy.sh               Mac 侧构建（绕代理）+ scp 到 home-win C:\work\widgetproto
-```
+## 安装与使用
 
-## 数据桥（组件作者 API，2026-07-25 起）
+1. 运行 `MacWidget-Setup-v*.exe`，按当前用户安装，不需要管理员权限。
+2. 安装器会检测 Microsoft Edge WebView2 Runtime；缺失时自动运行微软 Evergreen Bootstrapper。
+   首次补装 Runtime 时需要联网，已安装 Runtime 的电脑不会重复下载。
+3. 从开始菜单启动 MacWidget；单击或右击通知区图标可打开浮层。
+4. 选择“编辑小组件…”即可打开组件库，拖动卡片到桌面完成添加。
 
-组件页从宿主注入的 `mw` 拿数据，零依赖零配置（裸浏览器打开时 `window.mw` 不存在，页面自己 `?.` 守卫即得静态骨架）：
+安装、升级和卸载都保留 `%LOCALAPPDATA%\MacWidget` 中的布局与偏好。安装器升级时会先退出旧版本，
+然后等待单实例锁释放并自动恢复新版本。
 
-```js
-window.mw?.subscribe('sysmon', m => {
-  // m = {status:'ok'|'loading'|'error', stale, ts, data, error}
-  // · loading：首采未归（骨架期）
-  // · error：采样失败，data 是最后一份好数据（可能 null）+ stale:true
-  // · data 内单字段拿不到 = null（如无 GPU 计数器的机器）→ 画 "—"
-});
-```
+## 系统要求与隐私
 
-宿主侧数据源实现 `IDataProvider`（见 DataHub.cs），**有订阅者才采样**；
-反向通道 `mw.send(topic, cmd)` → provider 的 `ICommandSink`（命令后 250ms 快拍一帧跟手）。
-现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）、`music`（GSMTC 正在播放，1s；
-cmd = playpause/next/prev）、`battery`（2s；simbatt.json 模拟座）、
-**`weather@lat,lon`（参数化 topic：每城市独立采样/快照；MET Norway，CC-BY 4.0 商用可、
-识别性 UA、15min/城市；BYO-key 预留 cfg {source,key}）**。
-运行期换挡用 `mw.unsubscribe(topic)`（换城市=退旧订新，不 reload）。
-⚠️两条时序铁律（真机踩过）：订阅重置挂 NavigationStarting（放 Completed 会灭掉新文档刚发的 sub）；
-AddScriptToExecuteOnDocumentCreated 的注入快照是注册时冻结的——cfg 变更后必须重注册（RemoveScript+Add）。
+- Windows 10 1903+ 或 Windows 11，x64。
+- Microsoft Edge WebView2 Runtime（安装器会在缺失时引导安装）。
+- 建议 8 GB 以上内存；实际占用随组件数量、照片和媒体内容变化。
 
-**组件设置流（编辑小组件翻面）**：菜单"编辑「×」"→ 宿主发 `editcfg` → host.js 给 `<html>`
-加 `.cfgmode` 类（页面自备配置脸，CSS 翻面）。页面侧 API：`mw.cfg()` 读实例配置、
-`mw.saveCfg(obj)` 存（宿主落 widgets.json 的 Cfg 字段，形状组件自定）、
-`mw.pickFolder(fn)` 原生选文件夹、`mw.exitCfg()` 收面、`mw.on(type,fn)` 收宿主专发消息、
-`mw.log(x)` 写宿主 proto.log（页面排障唯一喉舌）。
-⚠️ photo 的源**整个由宿主 WebResourceRequested 供流**（页面文件+`__photos/*` 照片）：
-被 `SetVirtualHostNameToFolderMapping` 完整映射的源会在更低层短路、该源上拦截器**永不触发**，
-跨虚拟主机取子资源也一律失败——要拦截就别映射，二选一（真机实锤）。
+没有账号、遥测或自建后端。天气请求会直接发送到 MET Norway；其余组件数据均在本机读取。
+天气数据来源为 [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/compact)，
+遵循其 CC-BY 4.0 许可与请求频率要求。
 
-## 命令行
+## 可选：配合 MacDesk
 
-```
-MacWidget.exe --n 4 --control comp --backdrop acrylic --origin same --pin bottom --widget mixed
-  --control  hwnd | comp | native     comp=WebView2CompositionControl（本命方案）
-  --backdrop none | mica | acrylic | tabbed
-  --origin   same | multi             multi=每组件独立 site，强制拆 renderer
-  --pin      bottom | none
-  --widget   mixed | clock | monitor | weather | photo
-  --glass    extend | none            DwmExtendFrameIntoClientArea(-1) 开关
-  --light / --activate                浅色 / 允许抢焦点
+MacDesk 与 MacWidget 可以独立安装。两者都在运行时，MacWidget 会向 MacDesk 发送组件占用的物理像素
+矩形，MacDesk 可让桌面图标避让这些区域。该开关位于 MacDesk 设置中的 MacWidget 联动页；MacDesk
+也会检测已安装的 MacWidget，并在桌面右键菜单提供打开组件库的入口。
+
+## 从源码构建
+
+```bash
+# 发布 x64 Windows 构建
+~/.dotnet/dotnet publish src/WidgetProto -c Release -r win-x64 --no-self-contained -o publish
+
+# 部署到已配置的 Windows 测试机
+./deploy.sh 192.168.1.8
 ```
 
-与 MacDesk 完全独立的代码库；正式安装版将用户状态保存在 `%LOCALAPPDATA%\MacWidget`。
+安装器脚本位于 `installer/macwidget.iss`。其中的 WebView2 引导器来源、哈希和刷新规则见
+[installer/WEBVIEW2.md](installer/WEBVIEW2.md)。产品行为与测试记录请参阅：
+
+- [TESTPLAN.md](TESTPLAN.md) — 测试机操作和实验方法。
+- [RESULTS.md](RESULTS.md) — 早期技术验证结果。
+- [docs/store/](docs/store/) — 商店文案、定价和发布清单。
+
+开发/实验命令行参数仍保留在 `Options.cs`，不建议普通用户使用；MacDesk 拉起组件库使用
+`MacWidget.exe --edit-widgets`。
