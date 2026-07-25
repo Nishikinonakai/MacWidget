@@ -33,7 +33,8 @@ CloseApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 用户范围安装的 Inno Setup 有时不带中文包，故随仓库 vendored，CI/本机编译口径一致。
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -49,6 +50,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\MacWidg
 [Run]
 Filename: "{app}\MacWidget.exe"; Description: "{cm:LaunchProgram,MacWidget}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\MacWidget.exe"; Flags: nowait; Check: ShouldRelaunch
+
+[UninstallDelete]
+; 卸载安装文件后才删除空目录；若用户手动存放内容，则保守保留。
+Type: dirifempty; Name: "{app}"
 
 [Code]
 function ShouldRelaunch: Boolean;

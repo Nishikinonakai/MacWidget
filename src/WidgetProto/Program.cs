@@ -55,8 +55,9 @@ public static class Program
                 if (Opts.Control != "native")
                 {
                     // 全部组件共享同一个 Environment（同一 udf）→ 共享 browser/GPU 进程；
-                    // --process-per-site 合并同 site renderer（内存实验定案的产品配方）
-                    var udf = Path.Combine(BaseDir, "udf");
+                    // --process-per-site 合并同 site renderer（内存实验定案的产品配方）。
+                    // udf 是可变浏览器数据，必须随用户数据走，不能写进可卸载的安装目录。
+                    var udf = Path.Combine(DataDir, "udf");
                     var envOpts = new CoreWebView2EnvironmentOptions();
                     if (Opts.ProcPerSite) envOpts.AdditionalBrowserArguments = "--process-per-site";
                     Env = await CoreWebView2Environment.CreateAsync(null, udf, envOpts);
