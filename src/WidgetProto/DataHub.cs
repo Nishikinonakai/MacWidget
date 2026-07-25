@@ -6,7 +6,7 @@ namespace WidgetProto;
 /// <summary>
 /// 宿主→组件数据桥。契约第一天就按异步长成（将来天气等联网 provider 照插，不改协议）：
 /// 组件页 mw.subscribe(topic) → host.js 上报 {t:'sub'} → 这里登记并立即回放最近信封；
-/// provider 仅在有订阅者时按 Interval 采样（订阅者门控；被全屏遮挡降频=TrySuspend 后续）；
+/// provider 仅在有可见订阅者时按 Interval 采样（订阅者门控；被全屏遮挡的组件会随 WebView2 挂起停表）；
 /// 信封 {t:'data',topic,status:'ok'|'loading'|'error',stale,ts,data,error}——
 /// 采样失败保留最后一份好数据照发 + stale:true，组件永远有东西可画、也不撒谎。
 /// Fetch 在线程池跑（慢计数器/联网不卡 UI），结果投回 UI 线程再派发。
@@ -114,6 +114,18 @@ public static class DataHub
         foreach (var t in _topics.Values) StopIfIdle(t);
     }
 
+    /// <summary>WebView2 成功挂起后，组件仍保留订阅关系但不再让无人可见的 topic 采样。</summary>
+    public static void SetSuspended(WidgetWindow w, bool suspended)
+    {
+        if (!_subs.TryGetValue(w, out var set)) return;
+        foreach (var topic in set)
+            if (_topics.TryGetValue(topic, out var t))
+            {
+                if (suspended) StopIfIdle(t);
+                else EnsureRunning(t); // 恢复立即快拍，组件不等下一个 Interval
+            }
+    }
+
     static void EnsureRunning(Topic t)
     {
         if (t.Timer != null) return;
@@ -126,10 +138,10 @@ public static class DataHub
     static void StopIfIdle(Topic t)
     {
         if (t.Timer == null) return;
-        foreach (var set in _subs.Values)
-            if (set.Contains(t.Provider.Topic)) return;
+        foreach (var (widget, set) in _subs)
+            if (set.Contains(t.Provider.Topic) && !widget.IsDataSuspended) return;
         t.Timer.Stop(); t.Timer = null;
-        Program.Log($"datahub: {t.Provider.Topic} idle, sampling stopped");
+        Program.Log($"datahub: {t.Provider.Topic} idle or occluded, sampling stopped");
     }
 
     static void Sample(Topic t)

@@ -14,7 +14,11 @@ public sealed class WidgetWindow : Window
     readonly bool _startLifted;
     readonly DisplayTopology.Position? _initialPosition;
     CoreWebView2? _core;
+    UIElement? _webView;
     bool _removing;
+    bool _occluded;
+    bool _suspended;
+    bool _suspendInFlight;
 
     public string Kind { get; }
     public string SizeClass { get; private set; }
@@ -120,6 +124,7 @@ public sealed class WidgetWindow : Window
             {
                 var wv = new WebView2CompositionControl { DefaultBackgroundColor = System.Drawing.Color.Transparent };
                 Content = wv;
+                _webView = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
                 wv.Source = url;
@@ -128,6 +133,7 @@ public sealed class WidgetWindow : Window
             {
                 var wv = new Microsoft.Web.WebView2.Wpf.WebView2 { DefaultBackgroundColor = System.Drawing.Color.Transparent };
                 Content = wv;
+                _webView = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
                 wv.Source = url;
@@ -206,7 +212,7 @@ public sealed class WidgetWindow : Window
 
     public void PushState(bool forcePost = false)
     {
-        if (_core == null) return;
+        if (_core == null || _suspended) return;
         var (dark, mono) = StateNow();
         var s = (dark, mono, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
@@ -222,9 +228,74 @@ public sealed class WidgetWindow : Window
     /// <summary>数据桥投递（DataHub 调）；core 未就绪静默丢——订阅回放兜住后续。</summary>
     public void PostJson(string json)
     {
+        if (_suspended) return;
         try { _core?.PostWebMessageAsJson(json); }
         catch (Exception ex) { Program.Log($"widget {_i} postjson FAIL: {ex.Message}"); }
     }
+
+    /// <summary>
+    /// ColorMode 每 500ms 用同一轮普通窗口枚举调用。TrySuspend 仅可用于 controller 不可见的
+    /// WebView，因此完整遮挡时先隐藏控件；编辑、拖拽或任意露出会立即恢复。
+    /// </summary>
+    public void SetOccluded(bool covered)
+    {
+        bool shouldSuspend = covered && !EditMode.On && !_dragging && !_removing;
+        if (!shouldSuspend)
+        {
+            _occluded = false;
+            ResumeFromOcclusion();
+            return;
+        }
+        _occluded = true;
+        if (_core == null || _webView == null || _suspended || _suspendInFlight) return;
+        _ = SuspendForOcclusionAsync(_core, _webView);
+    }
+
+    async Task SuspendForOcclusionAsync(CoreWebView2 core, UIElement view)
+    {
+        _suspendInFlight = true;
+        try
+        {
+            view.Visibility = Visibility.Hidden; // TrySuspendAsync 的 API 前置条件
+            bool ok = await core.TrySuspendAsync();
+            if (!ReferenceEquals(core, _core)) return;
+            _suspended = ok && core.IsSuspended;
+            if (_suspended)
+            {
+                DataHub.SetSuspended(this, true);
+                Program.Log($"widget {_i} ({Kind}) suspended (occluded)");
+            }
+            else
+            {
+                view.Visibility = Visibility.Visible;
+                Program.Log($"widget {_i} ({Kind}) suspend skipped by WebView2");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(view, _webView)) view.Visibility = Visibility.Visible;
+            Program.Log($"widget {_i} ({Kind}) suspend FAIL: {ex.Message}");
+        }
+        finally
+        {
+            _suspendInFlight = false;
+            if (!_occluded) ResumeFromOcclusion();
+        }
+    }
+
+    void ResumeFromOcclusion()
+    {
+        if (_webView != null) _webView.Visibility = Visibility.Visible;
+        bool wasSuspended = _suspended || _core?.IsSuspended == true;
+        _suspended = false;
+        if (!wasSuspended) return;
+        try { _core?.Resume(); }
+        catch (Exception ex) { Program.Log($"widget {_i} ({Kind}) resume FAIL: {ex.Message}"); }
+        DataHub.SetSuspended(this, false);
+        Program.Log($"widget {_i} ({Kind}) resumed (visible)");
+    }
+
+    internal bool IsDataSuspended => _suspended;
 
     /// <summary>切尺寸档（菜单调）：帧改尺寸、左上角锚定，违规才纠正动画（与拖拽落位同引擎）。</summary>
     public void ApplySize(string size)

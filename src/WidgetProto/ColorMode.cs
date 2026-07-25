@@ -46,11 +46,18 @@ public static class ColorMode
     static void Tick()
     {
         bool dark = ReadDark();
-        var busy = Scan();
+        var (busy, occluders) = Scan();
         bool changed = dark != Dark || !busy.SetEquals(_busy);
         Dark = dark;
         _busy.Clear();
         foreach (var m in busy) _busy.Add(m);
+
+        // 和 Automatic 着色共用一次窗口枚举：仅单个普通窗口完整覆盖组件时才允许挂起。
+        // 多个窗口拼出来的覆盖不猜，避免误伤露在缝里的组件。
+        foreach (Window w in Application.Current.Windows)
+            if (w is WidgetWindow ww)
+                ww.SetOccluded(occluders.Any(r => Covers(r, ww.PhysicalBounds)));
+
         if (!changed) return;
         Program.Log($"colormode: dark={dark} busyMonitors={busy.Count}");
         foreach (Window w in Application.Current.Windows)
@@ -70,9 +77,17 @@ public static class ColorMode
 
     static readonly char[] _clsBuf = new char[64];
 
-    static HashSet<IntPtr> Scan()
+    static bool Covers(Rect cover, Rect target)
+    {
+        const double epsilon = 2; // DWM 阴影/边框可能让真实窗口矩形差 1px
+        return !target.IsEmpty && cover.Left <= target.Left + epsilon && cover.Top <= target.Top + epsilon &&
+               cover.Right >= target.Right - epsilon && cover.Bottom >= target.Bottom - epsilon;
+    }
+
+    static (HashSet<IntPtr> Busy, List<Rect> Occluders) Scan()
     {
         var busy = new HashSet<IntPtr>();
+        var occluders = new List<Rect>();
         Native.EnumWindows((hwnd, _) =>
         {
             if (!Native.IsWindowVisible(hwnd) || Native.IsIconic(hwnd)) return true;
@@ -88,9 +103,10 @@ public static class ColorMode
             Native.GetWindowThreadProcessId(hwnd, out uint pid);
             if (pid == _selfPid || IsPeerProcess(pid)) return true;
             busy.Add(Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTONEAREST));
+            occluders.Add(new Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top));
             return true;
         }, IntPtr.Zero);
-        return busy;
+        return (busy, occluders);
     }
 
     static bool IsPeerProcess(uint pid)

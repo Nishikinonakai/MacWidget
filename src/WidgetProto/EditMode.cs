@@ -34,6 +34,11 @@ public static class EditMode
     static void Broadcast()
     {
         foreach (Window w in Application.Current.Windows)
-            (w as WidgetWindow)?.PushState();
+            if (w is WidgetWindow widget)
+            {
+                // 编辑模式必须立即可交互，不能等下一轮遮挡扫描才从挂起里醒来。
+                if (On) widget.SetOccluded(false);
+                widget.PushState();
+            }
     }
 }
