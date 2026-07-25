@@ -54,6 +54,7 @@ WebView2 Runtime 150.0.4078.65，.NET 10.0.2，机主系统设置 **透明效果
 | 旧正式版升级到 CI.17 | ✅ 安装完成；安装目录版本为 `0.2.0-ci.17+854451c...` |
 | 自包含 .NET | ✅ `coreclr.dll`、`hostfxr.dll`、`hostpolicy.dll` 均在安装目录 |
 | 启动与单实例 | ✅ `--restart` PID 切换后只保留一个进程；安装后首次启动也通过 |
+| 已安装版安全重启 | ✅ CI.17 的 `--restart` 从 PID 12616 交接至 19128，WebView2、托盘和 MacDesk 管道均在新实例恢复 |
 | WebView2 / 托盘 / MacDesk | ✅ Runtime 就绪、托盘就绪，且 `widgetlink connected to MacDesk` 出现在本次启动日志 |
 | 天气与许可通知 | ✅ MET Norway 请求 HTTP 200；安装目录包含完整 `THIRD-PARTY-NOTICES.md` |
 | 数据保留 | ✅ 同版本静默重装退出码 `0`，`settings.json`、`layout.json` SHA-256 均未变化 |
