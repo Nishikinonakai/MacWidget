@@ -39,6 +39,9 @@ MacWidget 是 Windows 桌面小组件应用：把时钟、日历、天气、系�
 天气数据来源为 [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/compact)，
 遵循其 CC-BY 4.0 许可与请求频率要求。
 
+安装目录中的 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 列出 WebView2 SDK 的再发布通知，以及
+MET Norway 天气数据的完整署名与许可链接。
+
 ## 可选：配合 MacDesk
 
 MacDesk 与 MacWidget 可以独立安装。两者都在运行时，MacWidget 会向 MacDesk 发送组件占用的物理像素

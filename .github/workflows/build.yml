@@ -67,6 +67,20 @@ jobs:
             }
           }
 
+      - name: Verify shipped third-party notices
+        shell: pwsh
+        run: |
+          $notices = Join-Path $env:GITHUB_WORKSPACE 'publish\THIRD-PARTY-NOTICES.md'
+          if (-not (Test-Path -LiteralPath $notices -PathType Leaf)) {
+            throw 'THIRD-PARTY-NOTICES.md was not copied to the publish directory.'
+          }
+          $text = Get-Content -LiteralPath $notices -Raw
+          foreach ($requiredText in @('Microsoft.Web.WebView2', 'MET Norway', 'CC BY 4.0')) {
+            if ($text -notlike "*$requiredText*") {
+              throw "Published third-party notices are missing: $requiredText"
+            }
+          }
+
       - name: Validate embedded WebView2 bootstrapper
         shell: pwsh
         run: |

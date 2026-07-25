@@ -40,6 +40,8 @@
 4. 完整遮挡时暂停 WebView2 与数据采样、重新可见或编辑时立即恢复。
 5. 组件库分类栏、搜索与 Suggestions；推荐项优先展示尚未摆到桌面的组件。
 6. 明亮与深色主题下的组件、托盘浮层真机视觉走查。
+7. 安装目录随产品交付 `THIRD-PARTY-NOTICES.md`：WebView2 SDK 的 BSD-3-Clause 再发布声明，以及
+   MET Norway 天气数据的 CC BY 4.0 署名与许可链接；CI 检查该文件进入 publish 目录。
 
 剩余收口项（均可代理）：
 
