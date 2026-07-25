@@ -7,7 +7,7 @@ namespace WidgetProto;
 /// <summary>组件目录：kind → 支持的尺寸档与帧尺寸（s 180 / m 360×180 / l 360×360）。</summary>
 public static class WidgetRegistry
 {
-    public static readonly string[] Kinds = { "clock", "calendar", "monitor", "weather", "photo", "music" };
+    public static readonly string[] Kinds = { "clock", "calendar", "monitor", "weather", "photo", "music", "battery" };
 
     /// <summary>kind 支持的尺寸档（macOS 语义：组件自报支持档）。</summary>
     public static string[] SizesOf(string kind) => kind switch

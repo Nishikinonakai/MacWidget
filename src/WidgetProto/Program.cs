@@ -31,6 +31,7 @@ public static class Program
             {
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
                 DataHub.Register(new MusicProvider());
+                DataHub.Register(new BatteryProvider());
 
                 if (Opts.Control != "native")
                 {

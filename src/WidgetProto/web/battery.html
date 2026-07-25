@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  /* 电池 · Small（macOS Batteries 单环形态；浅/深自适应卡，走四态默认路径）。
+     态：无电池占位 / 常态绿环 / 低电(≤20% 未充)红 / 充电⚡ / 已充满。 */
+  :root { --tint: #30D158; --warn: #FF453A; }
+  .content { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; }
+
+  .empty { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px;
+           align-items:center; justify-content:center; color:var(--fg2); }
+  .empty span { font-size:12px; font-weight:500; }
+  html:not(.nobatt) .empty { display:none; }
+  html.nobatt .live { display:none !important; }
+
+  .wrap { position:relative; width:96px; height:96px; }
+  svg.ring { width:96px; height:96px; transform:rotate(-90deg); }
+  .track { fill:none; stroke:var(--hairline); stroke-width:7; }
+  .arc   { fill:none; stroke:var(--tint); stroke-width:7; stroke-linecap:round;
+           transition:stroke-dashoffset .6s ease, stroke .3s ease; }
+  html.low .arc { stroke:var(--warn); }
+  .mid { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:2px; }
+  .mid b { font-size:19px; font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums; }
+  html.low .mid b { color:var(--warn); }
+  .bolt { display:none; }
+  html.charging .bolt { display:block; }
+  .bolt path { fill:var(--tint); }
+  .cap { font-size:11px; font-weight:500; color:var(--fg2); }
+  html.stale .live { opacity:.55; transition:opacity .3s ease; }
+</style></head><body>
+<div class="card"><div class="content">
+  <div class="empty">
+    <svg width="36" height="20" viewBox="0 0 36 20"><rect x="1" y="1" width="30" height="18" rx="4.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="33" y="6.5" width="3" height="7" rx="1.5" fill="currentColor"/><line x1="5" y1="17.5" x2="27" y2="2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span>无电池</span>
+  </div>
+  <div class="live wrap">
+    <svg class="ring" viewBox="0 0 96 96">
+      <circle class="track" cx="48" cy="48" r="41"/>
+      <circle class="arc" id="arc" cx="48" cy="48" r="41"/>
+    </svg>
+    <div class="mid">
+      <svg class="bolt" width="11" height="16" viewBox="0 0 11 16"><path d="M6.8 0 0 9.2h3.9L3.4 16l6.9-9.4H6.2L6.8 0z"/></svg>
+      <b id="pct">—</b>
+    </div>
+  </div>
+  <div class="live cap" id="cap">电池</div>
+</div></div>
+<script>
+  const H = document.documentElement, R = 41, C = 2 * Math.PI * R;
+  const arc = document.getElementById('arc');
+  arc.setAttribute('stroke-dasharray', C);
+  arc.setAttribute('stroke-dashoffset', C);
+  H.classList.add('nobatt');   // 首帧骨架 = 占位
+
+  window.mw?.subscribe('battery', m => {
+    if (m.status === 'loading') return;
+    H.classList.toggle('stale', m.status !== 'ok' || !!m.stale);
+    const d = m.data;
+    if (!d || !d.hasBattery) { H.classList.add('nobatt'); return; }
+    H.classList.remove('nobatt');
+    const p = d.pct;
+    arc.style.strokeDashoffset = C * (1 - (p ?? 0));
+    document.getElementById('pct').textContent = p == null ? '—' : Math.round(p * 100) + '%';
+    H.classList.toggle('charging', !!d.charging);
+    H.classList.toggle('low', p != null && p <= 0.2 && !d.charging);
+    const cap = document.getElementById('cap');
+    if (d.charging) cap.textContent = '充电中';
+    else if (d.ac && p != null && p >= 0.995) cap.textContent = '已充满';
+    else if (d.remainMin != null) cap.textContent = `剩余 ${Math.floor(d.remainMin / 60)}:${String(d.remainMin % 60).padStart(2, '0')}`;
+    else cap.textContent = '电池';
+  });
+</script>
+</body></html>

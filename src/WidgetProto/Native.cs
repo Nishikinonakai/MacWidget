@@ -92,6 +92,16 @@ public static class Native
     [DllImport("kernel32.dll")]
     public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buf);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SYSTEM_POWER_STATUS
+    {
+        public byte ACLineStatus, BatteryFlag, BatteryLifePercent, SystemStatusFlag;
+        public int BatteryLifeTime, BatteryFullLifeTime;   // 秒；-1 = 未知
+    }
+
+    [DllImport("kernel32.dll")]
+    public static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS s);
+
     public static string ProcessImageName(uint pid)
     {
         var h = OpenProcess(0x1000 /*PROCESS_QUERY_LIMITED_INFORMATION*/, false, pid);
