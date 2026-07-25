@@ -5,7 +5,7 @@ namespace WidgetProto;
 
 /// <summary>
 /// 托盘常驻入口：编辑小组件… / 自启 / 退出。
-/// 图标运行期自画（渐变圆角块 + W），正式图标与 WPF 弹层菜单产品期再换。
+/// 图标取自 EXE 内嵌的正式应用图标，确保托盘、快捷方式与安装器一致。
 /// </summary>
 public static class Tray
 {
@@ -15,7 +15,7 @@ public static class Tray
     {
         _icon = new System.Windows.Forms.NotifyIcon
         {
-            Icon = MakeIcon(),
+            Icon = LoadApplicationIcon(),
             Text = "MacWidget",
             Visible = true,
         };
@@ -54,30 +54,19 @@ public static class Tray
         catch { }
     }
 
-    static Icon MakeIcon()
+    static Icon LoadApplicationIcon()
     {
-        using var bmp = new Bitmap(32, 32);
-        using var g = Graphics.FromImage(bmp);
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var path = Rounded(new Rectangle(2, 2, 28, 28), 10);
-        using var grad = new System.Drawing.Drawing2D.LinearGradientBrush(
-            new Rectangle(0, 0, 32, 32),
-            Color.FromArgb(255, 64, 156, 255), Color.FromArgb(255, 175, 82, 222), 55f);
-        g.FillPath(grad, path);
-        using var f = new Font("Segoe UI", 15, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
-        var sz = g.MeasureString("W", f);
-        g.DrawString("W", f, Brushes.White, (32 - sz.Width) / 2, (32 - sz.Height) / 2 + 1);
-        return Icon.FromHandle(bmp.GetHicon());   // 托盘常驻整个进程生命周期，句柄不回收
-    }
+        try
+        {
+            var executable = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(executable))
+            {
+                using var extracted = Icon.ExtractAssociatedIcon(executable);
+                if (extracted != null) return (Icon)extracted.Clone();
+            }
+        }
+        catch { }
 
-    static System.Drawing.Drawing2D.GraphicsPath Rounded(Rectangle r, int rad)
-    {
-        var p = new System.Drawing.Drawing2D.GraphicsPath();
-        p.AddArc(r.X, r.Y, rad, rad, 180, 90);
-        p.AddArc(r.Right - rad, r.Y, rad, rad, 270, 90);
-        p.AddArc(r.Right - rad, r.Bottom - rad, rad, rad, 0, 90);
-        p.AddArc(r.X, r.Bottom - rad, rad, rad, 90, 90);
-        p.CloseFigure();
-        return p;
+        return (Icon)SystemIcons.Application.Clone();
     }
 }

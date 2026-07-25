@@ -12,6 +12,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>MacWidget</AssemblyName>
     <RootNamespace>WidgetProto</RootNamespace>
+    <ApplicationIcon>Assets\MacWidget.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.2.0</Version>
   </PropertyGroup>
