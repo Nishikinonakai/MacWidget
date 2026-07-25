@@ -64,7 +64,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
 
       - name: Upload private installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: MacWidget-Setup-${{ steps.version.outputs.version }}
           path: installer/MacWidget-Setup-v*.exe
