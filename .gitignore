@@ -1,6 +1,7 @@
 bin/
 obj/
 publish/
+.DS_Store
 *.user
 proto.log
 udf/
