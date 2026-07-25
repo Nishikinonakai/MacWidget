@@ -74,7 +74,8 @@ NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 
 `ExpectedVersion` 应填入正在验证的安装器文件名中的版本号（例如
 `MacWidget-Setup-v0.2.0-ci.17.exe` 对应 `0.2.0-ci.17`）；它按前缀比较，以允许 CI 写入
 commit 信息版本。该检查同时确认安装目录带有 `coreclr.dll`、`hostfxr.dll` 和 `hostpolicy.dll`，而不是
-意外依赖测试机预装的 .NET。
+意外依赖测试机预装的 .NET。WebView2、托盘和 MacDesk 管道信号必须出现在最近一次 `=== start:`
+启动标记之后，旧会话日志不能使本次启动误通过。
 
 从私有 CI artifact 取得 Beta 安装器时，其中已含同名 `.sha256` 与 `Verify-MacWidgetInstaller.ps1`；安装前在
 解压目录执行以下命令核验。文件名与散列必须同时匹配，任一不符都会失败退出：

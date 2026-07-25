@@ -72,10 +72,20 @@ $logPath = Join-Path $env:LOCALAPPDATA 'MacWidget\macwidget.log'
 if (-not (Test-Path -LiteralPath $logPath -PathType Leaf)) {
     throw "Startup log was not found: $logPath"
 }
-$logTail = @(Get-Content -LiteralPath $logPath -Tail 300 -ErrorAction Stop)
-$webViewReady = @($logTail | Where-Object { $_ -like '*webview2 env ready*' }).Count -gt 0
-$trayReady = @($logTail | Where-Object { $_ -like '*tray ready*' }).Count -gt 0
-$macDeskLinked = @($logTail | Where-Object { $_ -like '*widgetlink connected to MacDesk*' }).Count -gt 0
+$logTail = @(Get-Content -LiteralPath $logPath -Tail 2000 -ErrorAction Stop)
+$startupIndexes = @(
+    for ($index = 0; $index -lt $logTail.Count; $index++) {
+        if ($logTail[$index] -like '*=== start:*') { $index }
+    }
+)
+if ($startupIndexes.Count -eq 0) {
+    throw 'The startup log has no MacWidget start marker.'
+}
+$lastStartupIndex = $startupIndexes[-1]
+$currentStartupLog = @($logTail[$lastStartupIndex..($logTail.Count - 1)])
+$webViewReady = @($currentStartupLog | Where-Object { $_ -like '*webview2 env ready*' }).Count -gt 0
+$trayReady = @($currentStartupLog | Where-Object { $_ -like '*tray ready*' }).Count -gt 0
+$macDeskLinked = @($currentStartupLog | Where-Object { $_ -like '*widgetlink connected to MacDesk*' }).Count -gt 0
 if (-not $webViewReady) { throw 'The startup log has no WebView2-ready signal.' }
 if (-not $trayReady) { throw 'The startup log has no tray-ready signal.' }
 if ($RequireMacDeskLink -and -not $macDeskLinked) {
@@ -110,6 +120,7 @@ if (-not $SkipNetwork) {
     WebView2Ready      = $webViewReady
     TrayReady          = $trayReady
     MacDeskLinked      = $macDeskLinked
+    StartupLogEntries  = $currentStartupLog.Count
     WeatherHttpStatus  = $weatherStatus
     WeatherBytes       = $weatherBytes
     LogPath            = $logPath
