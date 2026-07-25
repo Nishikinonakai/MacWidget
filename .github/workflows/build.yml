@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup --version=6.7.3 --no-progress --yes
+        run: choco install innosetup --version=6.7.1 --no-progress --yes
 
       - name: Restore and publish x64 build
         id: version
