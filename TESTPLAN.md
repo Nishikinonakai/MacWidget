@@ -55,6 +55,20 @@ cd ~/Documents/Windows_desktop_macOSfied/widgetproto
 ```
 NuGet 必须绕代理（deploy.sh 已处理）。ssh/scp 用 `nakai@<ip>`，key 认证已配好。
 
+## 正式安装版冒烟检查
+
+每次安装器安装或升级后，用此脚本验证应用路径、单实例、WebView2 Runtime、WebView2/托盘启动信号、
+天气服务和可选的 MacDesk 管道联动。脚本默认只读；首次检查可加 `-StartIfNeeded` 拉起尚未运行的正式安装版。
+
+```powershell
+& C:\work\widgetproto\tools\smoke-installed.ps1 -StartIfNeeded -RequireMacDeskLink |
+  Format-List
+```
+
+`MacDeskLinked` 是状态字段：没有安装或没有运行 MacDesk 时应为 `False`，但不应妨碍 MacWidget 独立使用；
+只有传入 `-RequireMacDeskLink` 时才将其作为失败条件。网络临时不可用时可传 `-SkipNetwork`，其余本地启动项
+仍会检查。
+
 ## 结果记录模板
 
 ```
