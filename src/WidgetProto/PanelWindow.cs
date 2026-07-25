@@ -119,7 +119,16 @@ public sealed class PanelWindow : Window
     }
 
     public void PushState()
-        => Post($"{{\"t\":\"state\",\"dark\":{(ColorMode.Dark ? "true" : "false")}}}");
+    {
+        var installed = Application.Current.Windows.OfType<WidgetWindow>()
+            .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
+        Post(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            t = "state",
+            dark = ColorMode.Dark,
+            installed,
+        }));
+    }
 
     void Post(string json) { try { _core?.PostWebMessageAsJson(json); } catch { } }
 
@@ -196,6 +205,7 @@ public sealed class PanelWindow : Window
             Layout.Save();
         }
         _pick = null;
+        PushState(); // 放置或取消后刷新 Suggestions，优先推荐尚未摆到桌面的组件。
     }
 
 }

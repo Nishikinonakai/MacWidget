@@ -72,6 +72,7 @@ public sealed class WidgetWindow : Window
             if (!_removing) return;
             WidgetLink.Send(force: true);   // 管道对面即时回位
             Layout.Save();
+            PanelWindow.Existing?.PushState();
         };
     }
 
