@@ -19,10 +19,13 @@ public static class Placement
 
     public readonly record struct Result(double L, double T, bool Corrected);
 
-    public static Result Resolve(Rect self, IReadOnlyList<Rect> others, Rect work)
+    /// <param name="unit">当前显示器上一个 180pt 单元对应的物理 px。</param>
+    /// <param name="edgeMargin">当前显示器上 16pt 安全边对应的物理 px。</param>
+    public static Result Resolve(Rect self, IReadOnlyList<Rect> others, Rect work,
+                                 double unit, double edgeMargin)
     {
-        var safe = new Rect(work.X + EdgeMargin, work.Y + EdgeMargin,
-                            Math.Max(0, work.Width - EdgeMargin * 2), Math.Max(0, work.Height - EdgeMargin * 2));
+        var safe = new Rect(work.X + edgeMargin, work.Y + edgeMargin,
+                            Math.Max(0, work.Width - edgeMargin * 2), Math.Max(0, work.Height - edgeMargin * 2));
 
         // 1) 邻近判定：净距 ≤ JoinGap（重叠 = 负净距，也入组）
         int anchor = -1; double best = double.MaxValue;
@@ -34,7 +37,7 @@ public static class Placement
         }
         if (anchor >= 0)
         {
-            var cell = NearestCell(self, others[anchor], others, safe);
+            var cell = NearestCell(self, others[anchor], others, safe, unit);
             if (cell is { } c)
             {
                 bool overlapped = self.IntersectsWith(others[anchor]);
@@ -54,7 +57,7 @@ public static class Placement
         {
             if (clamped.IntersectsWith(others[i]))
             {
-                var cell = NearestCell(clamped, others[i], others, safe);
+                var cell = NearestCell(clamped, others[i], others, safe, unit);
                 if (cell is { } c) return new Result(c.X, c.Y, Corrected: true);
             }
         }
@@ -62,10 +65,10 @@ public static class Placement
     }
 
     /// <summary>锚组件单元网格上，距 self 最近的无冲突格位（self 按 w/h 占多个单元）</summary>
-    static Point? NearestCell(Rect self, Rect anchorRect, IReadOnlyList<Rect> others, Rect safe)
+    static Point? NearestCell(Rect self, Rect anchorRect, IReadOnlyList<Rect> others, Rect safe, double unit)
     {
-        int selfCols = (int)Math.Round(self.Width / Unit), selfRows = (int)Math.Round(self.Height / Unit);
-        int anchorCols = (int)Math.Round(anchorRect.Width / Unit), anchorRows = (int)Math.Round(anchorRect.Height / Unit);
+        int selfCols = (int)Math.Round(self.Width / unit), selfRows = (int)Math.Round(self.Height / unit);
+        int anchorCols = (int)Math.Round(anchorRect.Width / unit), anchorRows = (int)Math.Round(anchorRect.Height / unit);
         Point? best = null; double bd = double.MaxValue;
         for (int i = -selfCols; i <= anchorCols; i++)
         {
@@ -74,7 +77,7 @@ public static class Placement
                 // 跳过与锚重叠的格位；只取环绕锚的位置
                 bool overlapsAnchor = i > -selfCols && i < anchorCols && j > -selfRows && j < anchorRows;
                 if (overlapsAnchor) continue;
-                var p = new Point(anchorRect.X + i * Unit, anchorRect.Y + j * Unit);
+                var p = new Point(anchorRect.X + i * unit, anchorRect.Y + j * unit);
                 var r = new Rect(p.X, p.Y, self.Width, self.Height);
                 if (p.X < safe.Left || p.Y < safe.Top || r.Right > safe.Right || r.Bottom > safe.Bottom) continue;
                 bool clash = false;

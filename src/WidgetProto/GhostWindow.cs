@@ -46,15 +46,17 @@ public sealed class GhostWindow : Window
         };
     }
 
-    public void ShowAt(double l, double t, double w, double h)
+    /// <summary>以虚拟桌面物理 px 显示；和被拖组件共用跨屏坐标系。</summary>
+    public void ShowAt(Rect rect)
     {
-        Width = w; Height = h; Left = l; Top = t;
+        var display = DisplayTopology.ForRect(rect);
+        Width = rect.Width / display.Scale;
+        Height = rect.Height / display.Scale;
+        Left = 0; Top = 0;
         if (!IsVisible) Show();
-    }
-
-    public void MoveTo(double l, double t)
-    {
-        if (Math.Abs(Left - l) > 0.5 || Math.Abs(Top - t) > 0.5) { Left = l; Top = t; }
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+            Native.MoveWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
+                (int)Math.Round(rect.Width), (int)Math.Round(rect.Height), true);
     }
 
     public void HideGhost() { if (IsVisible) Hide(); }

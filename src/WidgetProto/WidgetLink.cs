@@ -30,9 +30,10 @@ public static class WidgetLink
         foreach (Window w in Application.Current.Windows)
         {
             if (w is not WidgetWindow ww || !ww.IsVisible) continue;
-            if (PresentationSource.FromVisual(ww) is not HwndSource src) continue;
-            double k = src.CompositionTarget.TransformToDevice.M11;   // 单屏原型：DIU→物理 px
-            rects.Add(new[] { ww.Left * k, ww.Top * k, ww.Width * k, ww.Height * k });
+            // GetWindowRect 已是虚拟桌面物理 px。不能再用 Left/Top × 单一 DPI：
+            // 副屏在左/上或混合缩放时，那个换算会把矩形送到错误的 MacDesk 屏幕。
+            var r = ww.PhysicalBounds;
+            if (!r.IsEmpty) rects.Add(new[] { r.Left, r.Top, r.Width, r.Height });
         }
         var line = JsonSerializer.Serialize(new { rects });
 

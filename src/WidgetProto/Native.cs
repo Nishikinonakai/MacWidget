@@ -50,6 +50,9 @@ public static class Native
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+
+    [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 
     [StructLayout(LayoutKind.Sequential)]

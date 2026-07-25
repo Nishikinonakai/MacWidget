@@ -12,6 +12,7 @@ public sealed class WidgetWindow : Window
 {
     readonly int _i;
     readonly bool _startLifted;
+    readonly DisplayTopology.Position? _initialPosition;
     CoreWebView2? _core;
     bool _removing;
 
@@ -23,9 +24,9 @@ public sealed class WidgetWindow : Window
     public string? PhotoFolder { get; set; }
 
     /// <param name="size">尺寸档 s/m/l；null 或不支持 = kind 默认档（老档案兼容）</param>
-    /// <param name="x">帧左上（DIU）；空 = 实验模式栅格位</param>
+    /// <param name="initialPosition">帧左上（相对显示器的物理 px）；空 = 实验模式栅格位</param>
     /// <param name="lifted">出生即升层（面板拖出中的新组件，不先钉底）</param>
-    public WidgetWindow(int i, string kind, string? size = null, double? x = null, double? y = null, bool lifted = false,
+    public WidgetWindow(int i, string kind, string? size = null, DisplayTopology.Position? initialPosition = null, bool lifted = false,
                         System.Text.Json.JsonElement? cfg = null)
     {
         Cfg = cfg;
@@ -34,6 +35,7 @@ public sealed class WidgetWindow : Window
         SizeClass = size != null && WidgetRegistry.SizesOf(kind).Contains(size)
             ? size : WidgetRegistry.DefaultSize(kind);
         _startLifted = lifted;
+        _initialPosition = initialPosition;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = false;   // 铁律：layered 与 WPF D3D/DWM backdrop 互斥（macdesk-pitfalls）
@@ -46,14 +48,16 @@ public sealed class WidgetWindow : Window
         (Width, Height) = WidgetRegistry.Size(kind, SizeClass);
 
         WindowStartupLocation = WindowStartupLocation.Manual;
-        if (x is { } xl && y is { } yt) { Left = xl; Top = yt; }
-        else
+        Left = 0; Top = 0; // hWnd 建好后统一走物理像素定位，混合 DPI 不能用 Left/Top 跨屏。
+        if (_initialPosition == null)
         {
             // 实验模式：刻意不规整的栅格铺开（自由摆放是一等公民，便于验证非网格落点）
-            var wa = SystemParameters.WorkArea;
+            var display = DisplayTopology.Primary();
+            double k = display.Scale;
             int col = i % 2, row = i / 2;
-            Left = wa.Right - 24 - (Width + 36) * (col + 1) + (col == 0 ? 0 : 13);
-            Top = wa.Top + 20 + row * (Placement.Unit + 40) + i * 7;
+            double x = display.Work.Right - display.Physical.Left - 24 * k - (Width + 36) * k * (col + 1) + (col == 0 ? 0 : 13 * k);
+            double y = display.Work.Top - display.Physical.Top + 20 * k + row * (Placement.Unit + 40) * k + i * 7 * k;
+            _initialPosition = new DisplayTopology.Position(display.Key, x, y);
         }
 
         SourceInitialized += OnSourceInit;
@@ -87,6 +91,7 @@ public sealed class WidgetWindow : Window
         if (Program.Opts.Pin == "bottom") BottomPin.Install(src);
         if (_startLifted) BottomPin.Lift(h);
         if (Program.Opts.NoActivate) src.AddHook(NoActivateHook);
+        if (_initialPosition is { } pos) MoveToPhysical(RectFor(pos));
     }
 
     static IntPtr NoActivateHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -228,9 +233,15 @@ public sealed class WidgetWindow : Window
         SizeClass = size;
         (Width, Height) = WidgetRegistry.Size(Kind, size);
         Program.Log($"widget {_i} ({Kind}) size -> {size}");
-        var res = Resolve(Left, Top);
-        if (res.Corrected) AnimateTo(res.L, res.T);
-        else { WidgetLink.Send(force: true); Layout.Save(); }
+        // WPF 会在本轮布局后才把 DIU 尺寸落实到当前屏的物理尺寸。
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            var now = PhysicalBounds;
+            var candidate = RectAt(now.Left, now.Top);
+            var res = Resolve(candidate);
+            if (res.Corrected) AnimateTo(res);
+            else { MoveToPhysical(candidate); WidgetLink.Send(force: true); Layout.Save(); }
+        });
     }
 
     /// <summary>移除：页面缩退动画（bye）→ 收窗 → 持久化/联动即时更新。</summary>
@@ -247,7 +258,8 @@ public sealed class WidgetWindow : Window
 
     // ---- 拖拽摆位 + 并组吸附 + 落点虚影（引擎 v2，帧制参数） ----
 
-    double _origL, _origT;
+    Rect _origBounds;
+    double _dragScale;
     bool _dragging;
     System.Windows.Threading.DispatcherTimer? _anim;
 
@@ -311,20 +323,23 @@ public sealed class WidgetWindow : Window
                 case "dragstart":
                     _anim?.Stop();
                     _dragging = true;
-                    _origL = Left; _origT = Top;
+                    _origBounds = PhysicalBounds;
+                    _dragScale = DpiScale();
                     BottomPin.Lift(Hwnd());          // macOS 同款：拖拽中的组件升层
-                    Program.Log($"widget {_i} dragstart at ({Left:f0},{Top:f0})");
+                    Program.Log($"widget {_i} dragstart at ({_origBounds.Left:f0},{_origBounds.Top:f0})px");
                     break;
                 case "drag":
                 {
                     if (!_dragging) break;
-                    // Chromium 的 screenX/Y 是 DIP，与 WPF DIU 同标度（同 DPI 下），直接相加
-                    double nl = _origL + root.GetProperty("dx").GetDouble();
-                    double nt = _origT + root.GetProperty("dy").GetDouble();
-                    MoveTo(nl, nt);                  // 自由跟手，不吸不拦
+                    // Chromium 的 screenX/Y 是该窗的 DIP；拖拽开始时换成物理 px，
+                    // 之后可跨过不同 DPI 的显示器而不把虚拟桌面原点缩放错。
+                    double nl = _origBounds.Left + root.GetProperty("dx").GetDouble() * _dragScale;
+                    double nt = _origBounds.Top + root.GetProperty("dy").GetDouble() * _dragScale;
+                    var candidate = RectAt(nl, nt);
+                    MoveToPhysical(candidate);       // 自由跟手，不吸不拦
                     WidgetLink.Send();               // MacDesk 图标实时避让（~30Hz 节流）
-                    var res = Resolve(nl, nt);
-                    if (res.Corrected) GhostWindow.Instance.ShowAt(res.L, res.T, Width, Height);
+                    var res = Resolve(candidate);
+                    if (res.Corrected) GhostWindow.Instance.ShowAt(RectAt(res.L, res.T));
                     else GhostWindow.Instance.HideGhost();   // 合法位置 → 无虚影（自由摆放是常态）
                     break;
                 }
@@ -334,15 +349,16 @@ public sealed class WidgetWindow : Window
                     _dragging = false;
                     GhostWindow.Instance.HideGhost();
                     BottomPin.Drop(Hwnd());
-                    var res = Resolve(Left, Top);
+                    var current = PhysicalBounds;
+                    var res = Resolve(current);
                     if (res.Corrected)
                     {
-                        Program.Log($"widget {_i} dragend at ({Left:f0},{Top:f0}) -> corrected ({res.L:f0},{res.T:f0})");
-                        AnimateTo(res.L, res.T);     // 违规才纠正动画
+                        Program.Log($"widget {_i} dragend at ({current.Left:f0},{current.Top:f0})px -> corrected ({res.L:f0},{res.T:f0})px");
+                        AnimateTo(res);              // 违规才纠正动画
                     }
                     else
                     {
-                        Program.Log($"widget {_i} dragend free at ({Left:f0},{Top:f0})");
+                        Program.Log($"widget {_i} dragend free at ({current.Left:f0},{current.Top:f0})px");
                     }
                     WidgetLink.Send(force: true);
                     Layout.Save();
@@ -355,42 +371,77 @@ public sealed class WidgetWindow : Window
 
     IntPtr Hwnd() => ((HwndSource)PresentationSource.FromVisual(this)!).Handle;
 
-    public Placement.Result Resolve(double l, double t)
+    /// <summary>当前帧的真实虚拟桌面物理矩形；这是避让、跨屏摆位与持久化的共同坐标系。</summary>
+    public Rect PhysicalBounds => PresentationSource.FromVisual(this) is HwndSource src
+        ? DisplayTopology.RectOf(src.Handle) : Rect.Empty;
+
+    double DpiScale()
+        => PresentationSource.FromVisual(this) is HwndSource src ? src.CompositionTarget.TransformToDevice.M11 : 1.0;
+
+    Rect RectFor(DisplayTopology.Position position)
     {
+        var display = DisplayTopology.ByKey(position.DisplayKey);
+        return new Rect(display.Physical.Left + position.X, display.Physical.Top + position.Y,
+            Width * display.Scale, Height * display.Scale);
+    }
+
+    /// <summary>给定物理左上，按落点所在显示器的 DPI 计算帧的物理尺寸。</summary>
+    public Rect RectAt(double left, double top)
+    {
+        var current = PhysicalBounds;
+        var probe = new Rect(left, top,
+            current.IsEmpty ? Width * DpiScale() : current.Width,
+            current.IsEmpty ? Height * DpiScale() : current.Height);
+        var display = DisplayTopology.ForRect(probe);
+        return new Rect(left, top, Width * display.Scale, Height * display.Scale);
+    }
+
+    public Placement.Result Resolve(Rect self)
+    {
+        var display = DisplayTopology.ForRect(self);
+        self = new Rect(self.Left, self.Top, Width * display.Scale, Height * display.Scale);
         var others = new List<Rect>();
         foreach (Window w in Application.Current.Windows)
             if (w is WidgetWindow ww && !ReferenceEquals(ww, this) && ww.IsVisible)
-                others.Add(new Rect(ww.Left, ww.Top, ww.Width, ww.Height));
-        return Placement.Resolve(new Rect(l, t, Width, Height), others, SystemParameters.WorkArea);
+            {
+                var other = ww.PhysicalBounds;
+                if (!other.IsEmpty && DisplayTopology.ForRect(other).Handle == display.Handle) others.Add(other);
+            }
+        return Placement.Resolve(self, others, display.Work,
+            Placement.Unit * display.Scale, Placement.EdgeMargin * display.Scale);
     }
 
-    public void MoveTo(double l, double t)
+    public void MoveToPhysical(Rect rect)
     {
         var src = (HwndSource)PresentationSource.FromVisual(this)!;
-        double k = src.CompositionTarget.TransformToDevice.M11;
-        Native.MoveWindow(src.Handle, (int)Math.Round(l * k), (int)Math.Round(t * k),
-            (int)Math.Round(Width * k), (int)Math.Round(Height * k), true);
+        Native.MoveWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
+            (int)Math.Round(rect.Width), (int)Math.Round(rect.Height), true);
     }
 
     /// <summary>面板拖出松手后的落位（PanelWindow 的光标循环调用）。</summary>
     public void SettleFromPickup(Placement.Result res)
     {
         BottomPin.Drop(Hwnd());
-        if (res.Corrected) AnimateTo(res.L, res.T);
+        if (res.Corrected) AnimateTo(res);
         else { WidgetLink.Send(force: true); Layout.Save(); }
     }
 
-    void AnimateTo(double l, double t)
+    void AnimateTo(Placement.Result res)
     {
         _anim?.Stop();
-        double fl = Left, ft = Top;
+        var from = PhysicalBounds;
+        var to = RectAt(res.L, res.T);
         int frame = 0; const int frames = 10;   // ~160ms cubic ease-out
         _anim = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _anim.Tick += (_, _) =>
         {
             frame++;
             double p = 1 - Math.Pow(1 - frame / (double)frames, 3);
-            MoveTo(fl + (l - fl) * p, ft + (t - ft) * p);
+            MoveToPhysical(new Rect(
+                from.Left + (to.Left - from.Left) * p,
+                from.Top + (to.Top - from.Top) * p,
+                from.Width + (to.Width - from.Width) * p,
+                from.Height + (to.Height - from.Height) * p));
             WidgetLink.Send(force: frame >= frames);   // 纠正动画期间也持续联动
             if (frame >= frames) { _anim!.Stop(); Layout.Save(); }
         };

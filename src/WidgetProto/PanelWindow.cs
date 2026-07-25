@@ -84,12 +84,20 @@ public sealed class PanelWindow : Window
     public void ShowPanel()
     {
         _hideTimer?.Stop();
-        var wa = SystemParameters.WorkArea;
-        Width = Math.Max(560, Math.Min(1020, wa.Width - 64));
-        Height = Math.Max(340, Math.Round(wa.Height * 0.472));
-        Left = wa.Left + Math.Round((wa.Width - Width) / 2);
-        Top = wa.Bottom - Height;
+        // 编辑是从当前鼠标所在桌面进入的；面板应留在那块屏幕，而不是总回主屏。
+        Native.GetCursorPos(out var cursor);
+        var display = DisplayTopology.ForPoint(new Point(cursor.X, cursor.Y));
+        double workW = display.Work.Width / display.Scale, workH = display.Work.Height / display.Scale;
+        Width = Math.Max(560, Math.Min(1020, workW - 64));
+        Height = Math.Max(340, Math.Round(workH * 0.472));
+        double pw = Width * display.Scale, ph = Height * display.Scale;
+        double px = display.Work.Left + Math.Round((display.Work.Width - pw) / 2);
+        double py = display.Work.Bottom - ph;
+        Left = 0; Top = 0;
         Show();
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+            Native.MoveWindow(src.Handle, (int)Math.Round(px), (int)Math.Round(py),
+                (int)Math.Round(pw), (int)Math.Round(ph), true);
         Activate();
         if (_core == null) { _pendingShow = true; return; }
         PostShow();
@@ -140,38 +148,42 @@ public sealed class PanelWindow : Window
         if (_pick != null || !WidgetRegistry.Kinds.Contains(kind)) return;
         var size = WidgetRegistry.DefaultSize(kind);
         var (w, h) = WidgetRegistry.Size(kind, size);
-        double k = Dpi();
         Native.GetCursorPos(out var pt);
-        var ww = new WidgetWindow(Program.NextId(), kind, size, pt.X / k - w / 2, pt.Y / k - h / 2, lifted: true);
+        var display = DisplayTopology.ForPoint(new Point(pt.X, pt.Y));
+        var pos = new DisplayTopology.Position(display.Key,
+            pt.X - display.Physical.Left - w * display.Scale / 2,
+            pt.Y - display.Physical.Top - h * display.Scale / 2);
+        var ww = new WidgetWindow(Program.NextId(), kind, size, pos, lifted: true);
         ww.Show();
         _pick = ww;
         Program.Log($"panel pickup {kind}");
         _pickTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _pickTimer.Tick += (_, _) => PickTick(w, h);
+        _pickTimer.Tick += (_, _) => PickTick();
         _pickTimer.Start();
     }
 
-    void PickTick(double w, double h)
+    void PickTick()
     {
         if (_pick == null) { _pickTimer?.Stop(); return; }
-        double k = Dpi();
         Native.GetCursorPos(out var pt);
-        double l = pt.X / k - w / 2, t = pt.Y / k - h / 2;
+        var current = _pick.PhysicalBounds;
+        var candidate = _pick.RectAt(pt.X - current.Width / 2, pt.Y - current.Height / 2);
         bool down = (Native.GetAsyncKeyState(0x01 /*VK_LBUTTON*/) & 0x8000) != 0;
-        _pick.MoveTo(l, t);
+        _pick.MoveToPhysical(candidate);
         WidgetLink.Send();
-        var res = _pick.Resolve(l, t);
+        var res = _pick.Resolve(candidate);
         if (down)
         {
-            if (res.Corrected) GhostWindow.Instance.ShowAt(res.L, res.T, w, h);
+            if (res.Corrected) GhostWindow.Instance.ShowAt(_pick.RectAt(res.L, res.T));
             else GhostWindow.Instance.HideGhost();
             return;
         }
         // 松手：面板范围内 = 取消（拖回收回），其余按引擎落位
         _pickTimer!.Stop(); _pickTimer = null;
         GhostWindow.Instance.HideGhost();
-        double cx = pt.X / k, cy = pt.Y / k;
-        bool overPanel = IsVisible && cx >= Left && cx <= Left + Width && cy >= Top && cy <= Top + Height;
+        var panel = PresentationSource.FromVisual(this) is HwndSource source
+            ? DisplayTopology.RectOf(source.Handle) : Rect.Empty;
+        bool overPanel = IsVisible && panel.Contains(new Point(pt.X, pt.Y));
         if (overPanel)
         {
             Program.Log("panel pickup canceled (dropped back on panel)");
@@ -179,14 +191,11 @@ public sealed class PanelWindow : Window
         }
         else
         {
-            Program.Log($"panel pickup drop at ({l:f0},{t:f0}) corrected={res.Corrected}");
+            Program.Log($"panel pickup drop at ({candidate.Left:f0},{candidate.Top:f0})px corrected={res.Corrected}");
             _pick.SettleFromPickup(res);
             Layout.Save();
         }
         _pick = null;
     }
 
-    double Dpi()
-        => PresentationSource.FromVisual(this) is HwndSource src
-            ? src.CompositionTarget.TransformToDevice.M11 : 1.0;
 }
