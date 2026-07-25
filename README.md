@@ -23,7 +23,7 @@ MacWidget 是 Windows 桌面小组件应用：把时钟、日历、天气、系�
 1. 运行 `MacWidget-Setup-v*.exe`，按当前用户安装，不需要管理员权限。
 2. 安装器会检测 Microsoft Edge WebView2 Runtime；缺失时自动运行微软 Evergreen Bootstrapper。
    首次补装 Runtime 时需要联网，已安装 Runtime 的电脑不会重复下载。
-3. 从开始菜单启动 MacWidget；单击或右击通知区图标可打开浮层。
+3. 从开始菜单启动 MacWidget；单击或右击通知区图标可打开浮层，其中的“隐私与数据”会打开随应用安装的本地说明。
 4. 选择“编辑小组件…”即可打开组件库，拖动卡片到桌面完成添加。
 
 WebView2 Runtime 会由 Microsoft 独立更新。MacWidget 检测到新版运行时时只显示托盘提示，不会打断当前

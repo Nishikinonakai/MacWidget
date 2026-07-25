@@ -18,7 +18,7 @@ public sealed class TrayPopupWindow : Window
     bool _closing;
 
     const double WidthDiu = 278;
-    const double HeightDiu = 319;
+    const double HeightDiu = 371;
     const double Pad = 12;
 
     public static void Toggle()
@@ -66,6 +66,8 @@ public sealed class TrayPopupWindow : Window
 
         card.Children.Add(ActionRow("重新启动 MacWidget", "应用已下载的 WebView2 安全更新", fg, muted,
             primary: false, () => TopologyWatcher.RequestRestart("tray restart")));
+        card.Children.Add(ActionRow("隐私与数据", "查看随应用提供的本地隐私说明", fg, muted,
+            primary: false, Program.OpenPrivacyNotice));
 
         card.Children.Add(Hairline(dark, 7, 6));
         card.Children.Add(ActionRow("退出 MacWidget", "组件会从桌面隐藏", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), muted,

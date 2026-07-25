@@ -10,6 +10,7 @@ public static class Program
     public static CoreWebView2Environment? Env;
     public static readonly string BaseDir = AppContext.BaseDirectory;
     public static readonly string WebDir = Path.Combine(AppContext.BaseDirectory, "web");
+    public static readonly string PrivacyNoticePath = Path.Combine(AppContext.BaseDirectory, "PRIVACY.md");
     public static readonly string DataDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacWidget");
 
@@ -128,6 +129,28 @@ public static class Program
     {
         Tray.Uninstall();
         Application.Current.Shutdown();
+    }
+
+    /// <summary>隐私说明随安装包提供；只交给系统默认的本地 Markdown 查看器，不跳转网络地址。</summary>
+    public static void OpenPrivacyNotice()
+    {
+        try
+        {
+            if (!File.Exists(PrivacyNoticePath))
+            {
+                Log("privacy notice missing: " + PrivacyNoticePath);
+                return;
+            }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PrivacyNoticePath)
+            {
+                UseShellExecute = true,
+            });
+            Log("privacy notice opened");
+        }
+        catch (Exception ex)
+        {
+            Log("privacy notice open failed: " + ex.Message);
+        }
     }
 
     static void NotifyWebView2RuntimeUpdate()
