@@ -32,6 +32,7 @@ public static class Program
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
                 DataHub.Register(new MusicProvider());
                 DataHub.Register(new BatteryProvider());
+                DataHub.Register(new WeatherProvider());  // 参数化：weather@lat,lon 每城市独立
 
                 if (Opts.Control != "native")
                 {

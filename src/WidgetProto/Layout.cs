@@ -22,7 +22,7 @@ public static class WidgetRegistry
     };
 
     /// <summary>有"编辑小组件"配置脸的 kind（菜单据此显示入口）。</summary>
-    public static bool Configurable(string kind) => kind is "photo";
+    public static bool Configurable(string kind) => kind is "photo" or "weather";
 
     public static string DefaultSize(string kind) => kind switch
     {

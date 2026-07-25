@@ -25,6 +25,18 @@ public interface ICommandSink
     void Command(string cmd);
 }
 
+/// <summary>
+/// 参数化数据源：topic = "{Prefix}@{param}"，每个不同 param 一份独立采样/快照/生命周期
+/// （如 weather@30.25,120.17——多个天气组件各配各的城市）。订阅者门控照常。
+/// </summary>
+public interface IParamProvider
+{
+    string Prefix { get; }
+    TimeSpan Interval { get; }
+    /// <summary>后台线程调用；抛异常 = error 信封。</summary>
+    object Fetch(string param);
+}
+
 public static class DataHub
 {
     sealed class Topic
@@ -39,13 +51,32 @@ public static class DataHub
 
     static readonly Dictionary<string, Topic> _topics = new();
     static readonly Dictionary<WidgetWindow, HashSet<string>> _subs = new();
+    static readonly List<IParamProvider> _paramProviders = new();
 
     public static void Register(IDataProvider p) => _topics[p.Topic] = new Topic { Provider = p };
+    public static void Register(IParamProvider p) => _paramProviders.Add(p);
+
+    /// <summary>参数化 topic 的实例化适配（每个完整 topic 串一份状态）。</summary>
+    sealed class ParamAdapter : IDataProvider
+    {
+        readonly IParamProvider _p; readonly string _topic, _param;
+        public ParamAdapter(IParamProvider p, string topic, string param) { _p = p; _topic = topic; _param = param; }
+        public string Topic => _topic;
+        public TimeSpan Interval => _p.Interval;
+        public object Fetch() => _p.Fetch(_param);
+    }
 
     /// <summary>UI 线程（WebMessage 回调）。重复订阅幂等——页面每次导航都会重发 sub。</summary>
     public static void Subscribe(WidgetWindow w, string topic)
     {
         if (!_topics.TryGetValue(topic, out var t))
+        {
+            var pp = _paramProviders.FirstOrDefault(p =>
+                topic.StartsWith(p.Prefix + "@", StringComparison.Ordinal) && topic.Length > p.Prefix.Length + 1);
+            if (pp != null)
+                _topics[topic] = t = new Topic { Provider = new ParamAdapter(pp, topic, topic[(pp.Prefix.Length + 1)..]) };
+        }
+        if (t == null)
         {
             Program.Log($"datahub: unknown topic '{topic}' from {w.Kind}");
             return;
@@ -67,6 +98,13 @@ public static class DataHub
         var once = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         once.Tick += (_, _) => { once.Stop(); Sample(t); };
         once.Start();
+    }
+
+    /// <summary>单 topic 退订（页面 mw.unsubscribe：换城市等运行期换挡）。</summary>
+    public static void Unsubscribe(WidgetWindow w, string topic)
+    {
+        if (!_subs.TryGetValue(w, out var set) || !set.Remove(topic)) return;
+        if (_topics.TryGetValue(topic, out var t)) StopIfIdle(t);
     }
 
     /// <summary>窗口关闭时调用；最后一个订阅者离场即停表。</summary>

@@ -40,7 +40,12 @@ window.mw?.subscribe('sysmon', m => {
 宿主侧数据源实现 `IDataProvider`（见 DataHub.cs），**有订阅者才采样**；
 反向通道 `mw.send(topic, cmd)` → provider 的 `ICommandSink`（命令后 250ms 快拍一帧跟手）。
 现有 topic：`sysmon`（CPU/内存/磁盘/GPU，1.6s）、`music`（GSMTC 正在播放，1s；
-cmd = playpause/next/prev）、`battery`（2s；simbatt.json 模拟座）。将来天气等联网源走同一契约直接插。
+cmd = playpause/next/prev）、`battery`（2s；simbatt.json 模拟座）、
+**`weather@lat,lon`（参数化 topic：每城市独立采样/快照；MET Norway，CC-BY 4.0 商用可、
+识别性 UA、15min/城市；BYO-key 预留 cfg {source,key}）**。
+运行期换挡用 `mw.unsubscribe(topic)`（换城市=退旧订新，不 reload）。
+⚠️两条时序铁律（真机踩过）：订阅重置挂 NavigationStarting（放 Completed 会灭掉新文档刚发的 sub）；
+AddScriptToExecuteOnDocumentCreated 的注入快照是注册时冻结的——cfg 变更后必须重注册（RemoveScript+Add）。
 
 **组件设置流（编辑小组件翻面）**：菜单"编辑「×」"→ 宿主发 `editcfg` → host.js 给 `<html>`
 加 `.cfgmode` 类（页面自备配置脸，CSS 翻面）。页面侧 API：`mw.cfg()` 读实例配置、

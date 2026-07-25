@@ -19,6 +19,10 @@
       (subs[topic] || (subs[topic] = [])).push(fn);
       post({ t: 'sub', topic: topic });
     },
+    unsubscribe(topic) {   // 参数化 topic 运行期换挡用（如天气换城市），宿主停掉无人订的采样
+      delete subs[topic];
+      post({ t: 'unsub', topic: topic });
+    },
     send(topic, cmd) {   // 反向通道：播控等命令 → 宿主 provider（ICommandSink）
       post({ t: 'cmd', topic: topic, cmd: cmd });
     },

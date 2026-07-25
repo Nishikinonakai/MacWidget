@@ -143,6 +143,10 @@ public sealed class WidgetWindow : Window
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
+        // 订阅随文档走：新导航启动 = 旧文档作废，订阅清零（reload 换 topic 不留孤儿采样）。
+        // ⚠️必须在 Starting 清而不是 Completed——新文档的 sub 消息先于 nav done 到达（真机踩过：
+        // 放 Completed 会把刚订完的全灭，四路 sub 后紧跟四路 idle stopped）。
+        core.NavigationStarting += (_, _) => DataHub.Drop(this);
         core.NavigationCompleted += (_, a) =>
         {
             Program.Log($"widget {_i} ({Kind}) nav done ok={a.IsSuccess}");
@@ -152,10 +156,25 @@ public sealed class WidgetWindow : Window
         core.WebMessageReceived += OnWebMessage;
         if (Kind == "photo") PhotoSupport.Hook(this, core, host);
         // 宿主运行时注入（拖拽/状态类/徽章/右键），组件作者零感知（产品同款设计）
-        await core.AddScriptToExecuteOnDocumentCreatedAsync(HostJs());
+        _initScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(HostJs());
     }
 
     // ---- 状态推送（着色状态机 + 编辑模式 → 页面 CSS 类） ----
+
+    string? _initScriptId;
+
+    /// <summary>cfg 变更后重注册文档创建注入（快照是注册时冻结的，不重注册则 reload 读到旧 cfg）。</summary>
+    async Task RefreshInitScript()
+    {
+        if (_core == null) return;
+        try
+        {
+            var old = _initScriptId;
+            _initScriptId = await _core.AddScriptToExecuteOnDocumentCreatedAsync(HostJs());
+            if (old != null) _core.RemoveScriptToExecuteOnDocumentCreated(old);
+        }
+        catch (Exception ex) { Program.Log($"widget {_i} initscript refresh FAIL: {ex.Message}"); }
+    }
 
     static string? _hostJs;
     string HostJs()
@@ -258,6 +277,10 @@ public sealed class WidgetWindow : Window
                     if (root.GetProperty("topic").GetString() is { Length: > 0 } topic)
                         DataHub.Subscribe(this, topic);
                     break;
+                case "unsub":
+                    if (root.GetProperty("topic").GetString() is { Length: > 0 } untopic)
+                        DataHub.Unsubscribe(this, untopic);
+                    break;
                 case "cmd":
                     DataHub.Command(root.GetProperty("topic").GetString() ?? "",
                                     root.GetProperty("cmd").GetString() ?? "");
@@ -268,6 +291,7 @@ public sealed class WidgetWindow : Window
                     Layout.Save();
                     Program.Log($"widget {_i} ({Kind}) cfg saved");
                     if (Kind == "photo" && _core != null) PhotoSupport.Apply(this, _core, _i);
+                    _ = RefreshInitScript();   // 注入快照跟上新 cfg（否则下次导航读到陈旧 cfg——真机踩过）
                     break;
                 case "pickfolder":
                 {
