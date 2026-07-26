@@ -8,6 +8,32 @@
   if (window.__mwHost) return; window.__mwHost = true;
 
   const post = m => { try { window.chrome?.webview?.postMessage(m); } catch { } };
+  const english = window.__mwInit?.lang === 'en';
+  // One shared runtime language bundle keeps independently authored widget
+  // pages consistent. It also observes dynamic data labels, so providers do
+  // not need to duplicate localization plumbing for every update.
+  const enText = {
+    '搜索组件':'Search widgets','浏览':'Browse','组件分类':'Widget categories','全部组件':'All Widgets','日程':'Schedule','信息':'Information','媒体':'Media',
+    '精选推荐':'Featured','根据当前桌面':'Based on your desktop','没有符合条件的组件。':'No matching widgets.','将组件拖到桌面上的任意位置来放置…':'Drag a widget anywhere on the desktop.','完成':'Done',
+    '时钟':'Clock','时间与世界时钟':'Time and world clocks','日历':'Calendar','日期与月历':'Date and month view','系统监视':'System Monitor','CPU、内存与磁盘':'CPU, memory, and disk',
+    '电池':'Battery','电量与充电状态':'Battery and charging','正在播放':'Now Playing','媒体播放控制':'Media controls','天气':'Weather','当前天气与预报':'Current conditions and forecast','照片':'Photos','文件夹照片轮播':'Photo-folder slideshow',
+    '搜索结果：':'Search results: ','个组件':' widgets','加载中':'Loading','天气地点':'Weather location','输入城市或地区':'Enter a city or region','搜索':'Search','搜索：Open-Meteo · 天气：MET Norway':'Search: Open-Meteo · Weather: MET Norway',
+    '暂时无法获取天气':'Weather is temporarily unavailable','请输入至少两个字符':'Enter at least two characters','正在搜索…':'Searching…','搜索服务暂不可用':'Search is unavailable','未找到地点':'No locations found',
+    '右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder','文件夹':'Folder','（图片）':'(Pictures)','选择…':'Choose…','轮换间隔':'Rotation interval','秒':' sec',
+    '没有播放内容':'Nothing playing','未知曲目':'Unknown track','内存':'Memory','磁盘':'Disk','无电池':'No battery','充电中':'Charging','已充满':'Fully charged','剩余 ':'Remaining '
+  };
+  function localize(root) {
+    if (!english || !root) return;
+    const translate = s => Object.entries(enText).reduce((v, [zh, en]) => v.split(zh).join(en), s);
+    const walk = node => {
+      if (node.nodeType === Node.TEXT_NODE) node.nodeValue = translate(node.nodeValue);
+      else if (node.nodeType === Node.ELEMENT_NODE) {
+        for (const a of ['placeholder', 'aria-label', 'title']) if (node.hasAttribute(a)) node.setAttribute(a, translate(node.getAttribute(a)));
+        node.childNodes.forEach(walk);
+      }
+    };
+    walk(root);
+  }
 
   // 数据桥：组件页 mw.subscribe(topic, fn) 订阅宿主数据源。信封
   // {status:'ok'|'loading'|'error', stale, ts, data, error}——error 时 data 是最后一份好数据（可能 null）。
@@ -28,6 +54,7 @@
     },
     // ---- 组件设置流（编辑小组件翻面）----
     cfg() { return cfg; },                             // 当前实例配置（宿主持久化在 widgets.json）
+    lang() { return (window.__mwInit && window.__mwInit.lang) || 'zh'; },
     saveCfg(c) { cfg = c; post({ t: 'cfg', cfg: c }); },
     pickFolder(fn) { pickQ.push(fn); post({ t: 'pickfolder' }); },   // 原生选文件夹，fn(path|null)
     exitCfg() { try { document.documentElement.classList.remove('cfgmode'); } catch { } },
@@ -62,6 +89,9 @@
   addEventListener('DOMContentLoaded', () => {
     try {
       if (pending) { const p = pending; pending = null; apply(p); }
+      localize(document.body);
+      if (english) new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(localize)))
+        .observe(document.body, { childList: true, subtree: true, characterData: true });
       // 减号徽章（样式在 widget.css，仅编辑态可见/可点）
       const b = document.createElement('div');
       b.className = 'mw-badge';

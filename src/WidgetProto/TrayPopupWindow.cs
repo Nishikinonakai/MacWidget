@@ -18,8 +18,8 @@ public sealed class TrayPopupWindow : Window
     bool _closing;
 
     const double WidthDiu = 278;
-    const double HeightDiu = 371;
-    const double Pad = 12;
+    const double HeightDiu = 450;
+    const double Pad = 0;
 
     public static void Toggle()
     {
@@ -55,22 +55,24 @@ public sealed class TrayPopupWindow : Window
 
         card.Children.Add(Header(fg, muted));
         card.Children.Add(Hairline(dark, 7, 7));
-        card.Children.Add(ActionRow("编辑小组件…", "打开组件库并调整桌面布局", fg, muted, primary: true, EditMode.Enter));
+        card.Children.Add(ActionRow(Ui.T("编辑小组件…", "Edit Widgets…"), Ui.T("打开组件库并调整桌面布局", "Open the widget gallery and arrange your desktop"), fg, muted, primary: true, EditMode.Enter));
 
         bool autostart = Autostart.IsEnabled();
-        card.Children.Add(ActionRow("开机启动", autostart ? "已开启" : "已关闭", fg, muted, primary: false, () =>
+        card.Children.Add(ActionRow(Ui.T("开机启动", "Launch at sign-in"), autostart ? Ui.T("已开启", "On") : Ui.T("已关闭", "Off"), fg, muted, primary: false, () =>
         {
             bool next = !Autostart.IsEnabled();
             if (!Autostart.SetEnabled(next)) Program.Log("tray popup: autostart toggle failed");
         }, ToggleState(autostart)));
 
-        card.Children.Add(ActionRow("重新启动 MacWidget", "应用已下载的 WebView2 安全更新", fg, muted,
+        card.Children.Add(ActionRow(Ui.T("重新启动 MacWidget", "Restart MacWidget"), Ui.T("应用已下载的 WebView2 安全更新", "Apply downloaded WebView2 security updates"), fg, muted,
             primary: false, () => TopologyWatcher.RequestRestart("tray restart")));
-        card.Children.Add(ActionRow("隐私与数据", "查看随应用提供的本地隐私说明", fg, muted,
+        card.Children.Add(ActionRow(Ui.T("隐私与数据", "Privacy & Data"), Ui.T("查看随应用提供的本地隐私说明", "View the local privacy notice included with the app"), fg, muted,
             primary: false, Program.OpenPrivacyNotice));
+        card.Children.Add(ActionRow("语言 / Language", ProductSettings.English ? "English" : "简体中文", fg, muted,
+            primary: false, () => { ProductSettings.ToggleLanguage(); TopologyWatcher.RequestRestart("language changed"); }));
 
         card.Children.Add(Hairline(dark, 7, 6));
-        card.Children.Add(ActionRow("退出 MacWidget", "组件会从桌面隐藏", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), muted,
+        card.Children.Add(ActionRow(Ui.T("退出 MacWidget", "Quit MacWidget"), Ui.T("组件会从桌面隐藏", "Widgets will be removed from the desktop"), new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), muted,
             primary: false, Program.RequestShutdown));
 
         bool transparency = ColorMode.TransparencyEnabled;
@@ -97,6 +99,13 @@ public sealed class TrayPopupWindow : Window
             Dwm.ExtendIntoClient(src.Handle);
             Dwm.SetDark(src.Handle, ColorMode.Dark);
             Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? "mica" : "none");
+            Dwm.SetRoundCorners(src.Handle);
+            Native.ApplyRoundedRegion(src.Handle, 15);
+        };
+        SizeChanged += (_, _) =>
+        {
+            if (PresentationSource.FromVisual(this) is HwndSource src)
+                Native.ApplyRoundedRegion(src.Handle, 15);
         };
         Deactivated += (_, _) => SafeClose();
         KeyDown += (_, e) => { if (e.Key == Key.Escape) SafeClose(); };
@@ -162,7 +171,7 @@ public sealed class TrayPopupWindow : Window
         int widgets = Application.Current.Windows.OfType<WidgetWindow>().Count(w => w.IsVisible);
         var labels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         labels.Children.Add(new TextBlock { Text = "MacWidget", Foreground = fg, FontSize = 14.5, FontWeight = FontWeights.SemiBold });
-        labels.Children.Add(new TextBlock { Text = $"{widgets} 个组件正在桌面上", Foreground = muted, FontSize = 11.5, Margin = new Thickness(0, 1, 0, 0) });
+        labels.Children.Add(new TextBlock { Text = ProductSettings.English ? $"{widgets} widget(s) on desktop" : $"{widgets} 个组件正在桌面上", Foreground = muted, FontSize = 11.5, Margin = new Thickness(0, 1, 0, 0) });
         var row = new DockPanel { Margin = new Thickness(4, 4, 4, 5) };
         DockPanel.SetDock(mark, Dock.Left);
         row.Children.Add(mark);

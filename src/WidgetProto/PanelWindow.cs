@@ -19,12 +19,16 @@ public sealed class PanelWindow : Window
     CoreWebView2? _core;
     bool _pendingShow;
     System.Windows.Threading.DispatcherTimer? _hideTimer;
+    System.Windows.Threading.DispatcherTimer? _deactivateCheck;
 
     PanelWindow()
     {
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        AllowsTransparency = false;
+        // A non-layered DWM backdrop is always an HWND-sized rectangle.  The
+        // gallery animates independently, so use a layered composition surface
+        // to keep each animation frame clipped to the rounded HTML panel.
+        AllowsTransparency = true;
         ShowInTaskbar = false;
         ShowActivated = true;      // 搜索框要键盘
         Topmost = true;
@@ -40,9 +44,8 @@ public sealed class PanelWindow : Window
             var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
             ex |= Native.WS_EX_TOOLWINDOW;
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
-            Dwm.ExtendIntoClient(h);   // 透明表面防黑底
             Dwm.SetDark(h, ColorMode.Dark);
-            Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? "mica" : "none");
+            Dwm.SetBackdrop(h, "none");
         };
         Loaded += OnLoaded;
         Closed += (_, _) => Existing = null;
@@ -55,8 +58,20 @@ public sealed class PanelWindow : Window
             if (!EditMode.On || _pick != null || !IsVisible) return;
             var fg = Native.GetForegroundWindow();
             Native.GetWindowThreadProcessId(fg, out uint pid);
-            if (pid == (uint)Environment.ProcessId) return;
-            EditMode.Exit();
+            if (pid != (uint)Environment.ProcessId) { EditMode.Exit(); return; }
+            // Explorer occasionally becomes foreground one dispatcher turn after
+            // WPF reports deactivation. Recheck once to make blank-desktop
+            // clicks deterministic without closing for our own widget windows.
+            _deactivateCheck?.Stop();
+            _deactivateCheck = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(55) };
+            _deactivateCheck.Tick += (_, _) =>
+            {
+                _deactivateCheck!.Stop();
+                if (!EditMode.On || _pick != null || !IsVisible) return;
+                Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out uint latePid);
+                if (latePid != (uint)Environment.ProcessId) EditMode.Exit();
+            };
+            _deactivateCheck.Start();
         };
     }
 
@@ -64,7 +79,7 @@ public sealed class PanelWindow : Window
     {
         try
         {
-            var wv = new Microsoft.Web.WebView2.Wpf.WebView2 { DefaultBackgroundColor = System.Drawing.Color.Transparent };
+            var wv = new Microsoft.Web.WebView2.Wpf.WebView2CompositionControl { DefaultBackgroundColor = System.Drawing.Color.Transparent };
             Content = wv;
             await wv.EnsureCoreWebView2Async(Program.Env);
             _core = wv.CoreWebView2;
@@ -125,7 +140,7 @@ public sealed class PanelWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource src)
         {
             Dwm.SetDark(src.Handle, ColorMode.Dark);
-            Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? "mica" : "none");
+            Dwm.SetBackdrop(src.Handle, "none");
         }
         var installed = Application.Current.Windows.OfType<WidgetWindow>()
             .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
@@ -174,6 +189,7 @@ public sealed class PanelWindow : Window
         var ww = new WidgetWindow(Program.NextId(), kind, size, pos, lifted: true);
         ww.Show();
         _pick = ww;
+        Post("""{"t":"pickup"}""");
         Program.Log($"panel pickup {kind}");
         _pickTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _pickTimer.Tick += (_, _) => PickTick();
@@ -214,6 +230,7 @@ public sealed class PanelWindow : Window
             Layout.Save();
         }
         _pick = null;
+        Post("""{"t":"drop"}""");
         PushState(); // 放置或取消后刷新 Suggestions，优先推荐尚未摆到桌面的组件。
     }
 

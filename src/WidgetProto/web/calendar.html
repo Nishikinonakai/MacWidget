@@ -8,17 +8,11 @@
   .content { padding: 15px 16px; display: flex; flex-direction: column; }
   .dow { font-size: 12px; font-weight: 700; color: var(--tint); letter-spacing: .8px; }
   .day { font-size: 38px; line-height: 1.12; }
-  .evts { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
-  .evt { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .dot { flex: 0 0 auto; width: 4px; height: 26px; border-radius: 2px; }
-  .evt .t { font-size: 11.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .evt .s { font-size: 10.5px; color: var(--fg2); }
   .month { display: none; }
 
   @media (min-width: 300px) {
     .content { flex-direction: row; gap: 18px; padding: 16px 18px; }
     .left { display: flex; flex-direction: column; flex: 0 0 88px; }
-    .evts { display: none; }
     .month { display: grid; flex: 1; grid-template-columns: repeat(7, 1fr);
              grid-auto-rows: 1fr; align-items: center; justify-items: center; }
     .month .hd { font-size: 9.5px; font-weight: 700; color: var(--fg2); }
@@ -33,10 +27,6 @@
   <div class="left">
     <div class="dow" id="dow">FRIDAY</div>
     <div class="day w-big" id="day">17</div>
-    <div class="evts">
-      <div class="evt"><span class="dot" style="background:#0A84FF"></span><span><div class="t">产品评审</div><div class="s">14:00–15:00</div></span></div>
-      <div class="evt"><span class="dot" style="background:#30D158"></span><span><div class="t">健身</div><div class="s">19:30</div></span></div>
-    </div>
   </div>
   <div class="month" id="mo"></div>
 </div></div>

@@ -26,7 +26,7 @@ public sealed class MenuWindow : Window
         _open.Activate();
     }
 
-    const double Pad = 14;   // 阴影呼吸空间（阴影画在窗口表面内）
+    const double Pad = 0;
 
     readonly double _cx, _cy;   // 光标落点（DIU）＝可视菜单期望左上
     bool _closing;              // Close 进行中窗口失活会再触发 Deactivated→Close（真机踩过：双重 Close 抛 InvalidOperation）
@@ -52,7 +52,7 @@ public sealed class MenuWindow : Window
         // macOS 菜单序：编辑本组件（配置脸）→ 尺寸档 → 编辑小组件…（全局编辑模式）→ 移除
         if (WidgetRegistry.Configurable(target.Kind))
         {
-            body.Children.Add(Row("编辑「" + KindLabel(target.Kind) + "」", fg, check: false,
+            body.Children.Add(Row(Ui.T("编辑「", "Edit “") + KindLabel(target.Kind) + Ui.T("」", "”"), fg, check: false,
                 () => target.PostJson("""{"t":"editcfg"}""")));
             body.Children.Add(Hairline(dark));
         }
@@ -66,9 +66,9 @@ public sealed class MenuWindow : Window
             }
             body.Children.Add(Hairline(dark));
         }
-        body.Children.Add(Row("编辑小组件…", fg, check: false, EditMode.Enter));
+        body.Children.Add(Row(Ui.T("编辑小组件…", "Edit Widgets…"), fg, check: false, EditMode.Enter));
         body.Children.Add(Hairline(dark));
-        body.Children.Add(Row("移除小组件", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), check: false,
+        body.Children.Add(Row(Ui.T("移除小组件", "Remove Widget"), new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), check: false,
             target.ByeAndClose));
 
         bool transparency = ColorMode.TransparencyEnabled;
@@ -96,6 +96,13 @@ public sealed class MenuWindow : Window
             Dwm.ExtendIntoClient(h);   // 透明表面防黑底
             Dwm.SetDark(h, ColorMode.Dark);
             Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? "acrylic" : "none"); // 短暂菜单用原生亚克力
+            Dwm.SetRoundCorners(h);
+            Native.ApplyRoundedRegion(h, 12);
+        };
+        SizeChanged += (_, _) =>
+        {
+            if (PresentationSource.FromVisual(this) is HwndSource src)
+                Native.ApplyRoundedRegion(src.Handle, 12);
         };
         Loaded += (_, _) =>
         {
@@ -120,12 +127,12 @@ public sealed class MenuWindow : Window
         Close();
     }
 
-    static string SizeLabel(string s) => s switch { "m" => "中", "l" => "大", _ => "小" };
+    static string SizeLabel(string s) => ProductSettings.English ? s switch { "m" => "Medium", "l" => "Large", _ => "Small" } : s switch { "m" => "中", "l" => "大", _ => "小" };
 
     static string KindLabel(string kind) => kind switch
     {
-        "photo" => "照片", "clock" => "时钟", "calendar" => "日历",
-        "monitor" => "系统监视", "weather" => "天气", "music" => "正在播放", "battery" => "电池",
+        "photo" => Ui.T("照片", "Photos"), "clock" => Ui.T("时钟", "Clock"), "calendar" => Ui.T("日历", "Calendar"),
+        "monitor" => Ui.T("系统监视", "System Monitor"), "weather" => Ui.T("天气", "Weather"), "music" => Ui.T("正在播放", "Now Playing"), "battery" => Ui.T("电池", "Battery"),
         _ => kind,
     };
 

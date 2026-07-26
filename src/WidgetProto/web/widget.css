@@ -51,9 +51,16 @@ html, body {
   background: var(--own-bg, none);
   opacity: 1; transition: opacity .3s ease;
 }
-html.mono .card { background: rgba(95,93,99,.92); }
+html.mono .card {
+  background: rgba(82,80,87,.66);
+  /* The native Mica surface below this transparent card supplies the sampled
+     desktop.  The local blur avoids a flat, gray overlay when the wallpaper
+     changes beneath a widget. */
+  -webkit-backdrop-filter: blur(22px) saturate(.82);
+  backdrop-filter: blur(22px) saturate(.82);
+}
 html.mono .card::before { opacity: 0; }
-html.noeffects.mono .card { background: #5f5d63; }
+html.noeffects.mono .card { background: #5f5d63; -webkit-backdrop-filter:none; backdrop-filter:none; }
 
 /* 内容整体去饱和（mono 实测：彩图标→白描边、彩曲线→灰） */
 .content {

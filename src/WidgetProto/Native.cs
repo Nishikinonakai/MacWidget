@@ -22,6 +22,36 @@ public static class Native
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("gdi32.dll")]
+    static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
+
+    [DllImport("user32.dll")]
+    static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("gdi32.dll")]
+    static extern bool DeleteObject(IntPtr obj);
+
+    [DllImport("user32.dll")]
+    static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>Clips the native DWM surface to the same rounded outline as its WPF content.</summary>
+    public static void ApplyRoundedRegion(IntPtr hwnd, double radiusDiu)
+        => ApplyRoundedInsetRegion(hwnd, 0, radiusDiu);
+
+    /// <summary>Clips an HWND to a rounded content card inset from its frame.</summary>
+    public static void ApplyRoundedInsetRegion(IntPtr hwnd, double insetDiu, double radiusDiu)
+    {
+        if (!GetWindowRect(hwnd, out var r)) return;
+        int width = r.Right - r.Left, height = r.Bottom - r.Top;
+        if (width <= 1 || height <= 1) return;
+        double scale = GetDpiForWindow(hwnd) / 96.0;
+        int inset = Math.Max(0, (int)Math.Round(insetDiu * scale));
+        int diameter = Math.Max(2, (int)Math.Round(radiusDiu * scale * 2));
+        var region = CreateRoundRectRgn(inset, inset, width - inset + 1, height - inset + 1, diameter, diameter);
+        if (region == IntPtr.Zero) return;
+        if (SetWindowRgn(hwnd, region, true) == 0) DeleteObject(region);
+    }
+
     // ---- Automatic 着色状态机 / 面板拖出 所需 ----
 
     [DllImport("user32.dll")]

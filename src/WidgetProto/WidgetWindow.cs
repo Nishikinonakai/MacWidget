@@ -14,11 +14,9 @@ public sealed class WidgetWindow : Window
     readonly bool _startLifted;
     readonly DisplayTopology.Position? _initialPosition;
     CoreWebView2? _core;
-    UIElement? _webView;
     bool _removing;
     bool _occluded;
-    bool _suspended;
-    bool _suspendInFlight;
+    bool _dataSuspended;
 
     public string Kind { get; }
     public string SizeClass { get; private set; }
@@ -91,11 +89,14 @@ public sealed class WidgetWindow : Window
         // 透明表面防黑底必须 extend（macwidget 已踩）；圆角不再走 DWM（系统 8px 与卡 20pt 不符，CSS 接管）
         if (Program.Opts.Glass == "extend") Dwm.ExtendIntoClient(h);
         Dwm.SetDark(h, Program.Opts.Appearance == "light" ? false : Program.Opts.Dark);
+        Dwm.SetRoundCorners(h);
+        Native.ApplyRoundedInsetRegion(h, 8, 20);
         if (Program.Opts.Backdrop != "none") Dwm.SetBackdrop(h, Program.Opts.Backdrop);   // 实验对照保留
 
         if (Program.Opts.Pin == "bottom") BottomPin.Install(src);
         if (_startLifted) BottomPin.Lift(h);
         if (Program.Opts.NoActivate) src.AddHook(NoActivateHook);
+        SizeChanged += (_, _) => Native.ApplyRoundedInsetRegion(h, 8, 20);
         if (_initialPosition is { } pos) MoveToPhysical(RectFor(pos));
     }
 
@@ -125,7 +126,6 @@ public sealed class WidgetWindow : Window
             {
                 var wv = new WebView2CompositionControl { DefaultBackgroundColor = System.Drawing.Color.Transparent };
                 Content = wv;
-                _webView = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
                 wv.Source = url;
@@ -134,7 +134,6 @@ public sealed class WidgetWindow : Window
             {
                 var wv = new Microsoft.Web.WebView2.Wpf.WebView2 { DefaultBackgroundColor = System.Drawing.Color.Transparent };
                 Content = wv;
-                _webView = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
                 wv.Source = url;
@@ -197,7 +196,7 @@ public sealed class WidgetWindow : Window
         if (_hostJs.Length == 0) Program.Log("WARN host.js missing");
         var (dark, mono, effects) = StateNow();
         var cfgJson = Cfg is { } c ? c.GetRawText() : "null";
-        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},effects:{(effects ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")},cfg:{cfgJson}}};\n" + _hostJs;
+        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},effects:{(effects ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")},lang:'{(ProductSettings.English ? "en" : "zh")}',cfg:{cfgJson}}};\n" + _hostJs;
     }
 
     (bool dark, bool mono, bool effects) StateNow()
@@ -213,10 +212,16 @@ public sealed class WidgetWindow : Window
 
     public void PushState(bool forcePost = false)
     {
-        if (_core == null || _suspended) return;
+        if (_core == null) return;
         var (dark, mono, effects) = StateNow();
         if (PresentationSource.FromVisual(this) is HwndSource src)
+        {
             Dwm.SetDark(src.Handle, dark);
+            // In mono the native Mica surface supplies the sampled material;
+            // widget.css deliberately leaves the card translucent so it is
+            // visible instead of being hidden behind an opaque color fill.
+            Dwm.SetBackdrop(src.Handle, effects && mono ? "mica" : Program.Opts.Backdrop);
+        }
         var s = (dark, mono, effects, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
         _pushed = s; _pushedOnce = true;
@@ -231,74 +236,26 @@ public sealed class WidgetWindow : Window
     /// <summary>数据桥投递（DataHub 调）；core 未就绪静默丢——订阅回放兜住后续。</summary>
     public void PostJson(string json)
     {
-        if (_suspended) return;
         try { _core?.PostWebMessageAsJson(json); }
         catch (Exception ex) { Program.Log($"widget {_i} postjson FAIL: {ex.Message}"); }
     }
 
     /// <summary>
-    /// ColorMode 每 500ms 用同一轮普通窗口枚举调用。TrySuspend 仅可用于 controller 不可见的
-    /// WebView，因此完整遮挡时先隐藏控件；编辑、拖拽或任意露出会立即恢复。
+    /// ColorMode every 500ms reports complete occlusion.  Keep the WebView
+    /// visible and only gate polling: suspending it required hiding the surface,
+    /// which made a just-uncovered widget wake one frame late.
     /// </summary>
     public void SetOccluded(bool covered)
     {
-        bool shouldSuspend = covered && !EditMode.On && !_dragging && !_removing;
-        if (!shouldSuspend)
-        {
-            _occluded = false;
-            ResumeFromOcclusion();
-            return;
-        }
-        _occluded = true;
-        if (_core == null || _webView == null || _suspended || _suspendInFlight) return;
-        _ = SuspendForOcclusionAsync(_core, _webView);
+        bool shouldGateData = covered && !EditMode.On && !_dragging && !_removing;
+        if (_occluded == shouldGateData) return;
+        _occluded = shouldGateData;
+        _dataSuspended = shouldGateData;
+        DataHub.SetSuspended(this, shouldGateData);
+        Program.Log($"widget {_i} ({Kind}) {(shouldGateData ? "data gated (occluded)" : "data resumed (visible)")}");
     }
 
-    async Task SuspendForOcclusionAsync(CoreWebView2 core, UIElement view)
-    {
-        _suspendInFlight = true;
-        try
-        {
-            view.Visibility = Visibility.Hidden; // TrySuspendAsync 的 API 前置条件
-            bool ok = await core.TrySuspendAsync();
-            if (!ReferenceEquals(core, _core)) return;
-            _suspended = ok && core.IsSuspended;
-            if (_suspended)
-            {
-                DataHub.SetSuspended(this, true);
-                Program.Log($"widget {_i} ({Kind}) suspended (occluded)");
-            }
-            else
-            {
-                view.Visibility = Visibility.Visible;
-                Program.Log($"widget {_i} ({Kind}) suspend skipped by WebView2");
-            }
-        }
-        catch (Exception ex)
-        {
-            if (ReferenceEquals(view, _webView)) view.Visibility = Visibility.Visible;
-            Program.Log($"widget {_i} ({Kind}) suspend FAIL: {ex.Message}");
-        }
-        finally
-        {
-            _suspendInFlight = false;
-            if (!_occluded) ResumeFromOcclusion();
-        }
-    }
-
-    void ResumeFromOcclusion()
-    {
-        if (_webView != null) _webView.Visibility = Visibility.Visible;
-        bool wasSuspended = _suspended || _core?.IsSuspended == true;
-        _suspended = false;
-        if (!wasSuspended) return;
-        try { _core?.Resume(); }
-        catch (Exception ex) { Program.Log($"widget {_i} ({Kind}) resume FAIL: {ex.Message}"); }
-        DataHub.SetSuspended(this, false);
-        Program.Log($"widget {_i} ({Kind}) resumed (visible)");
-    }
-
-    internal bool IsDataSuspended => _suspended;
+    internal bool IsDataSuspended => _dataSuspended;
 
     /// <summary>切尺寸档（菜单调）：帧改尺寸、左上角锚定，违规才纠正动画（与拖拽落位同引擎）。</summary>
     public void ApplySize(string size)
@@ -379,6 +336,11 @@ public sealed class WidgetWindow : Window
                     if (Kind == "photo" && _core != null) PhotoSupport.Apply(this, _core, _i);
                     _ = RefreshInitScript();   // 注入快照跟上新 cfg（否则下次导航读到陈旧 cfg——真机踩过）
                     break;
+                case "placeSearch":
+                    if (Kind != "weather") break;
+                    var query = root.TryGetProperty("q", out var q) ? q.GetString() ?? "" : "";
+                    _ = SearchPlacesAsync(query);
+                    break;
                 case "pickfolder":
                 {
                     var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "选择照片文件夹" };
@@ -441,6 +403,20 @@ public sealed class WidgetWindow : Window
             }
         }
         catch (Exception ex) { Program.Log($"widget {_i} webmsg FAIL: {ex.Message}"); }
+    }
+
+    async Task SearchPlacesAsync(string query)
+    {
+        try
+        {
+            var results = await WeatherSearch.FindAsync(query);
+            PostJson(System.Text.Json.JsonSerializer.Serialize(new { t = "placeResults", q = query, results }));
+        }
+        catch (Exception ex)
+        {
+            Program.Log($"weather place search FAIL: {ex.Message}");
+            PostJson(System.Text.Json.JsonSerializer.Serialize(new { t = "placeResults", q = query, results = Array.Empty<object>(), error = true }));
+        }
     }
 
     IntPtr Hwnd() => ((HwndSource)PresentationSource.FromVisual(this)!).Handle;

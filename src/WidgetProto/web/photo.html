@@ -14,10 +14,21 @@
   .back { transform: rotateY(180deg); background: var(--card-bg); }
 
   /* ---- 正面：轮播 ---- */
+  .live-face { position:absolute; inset:0; overflow:hidden; }
+  .live-face::before { content:""; position:absolute; inset:-10%; background-image:var(--active-photo,none);
+    background-size:cover; background-position:center; opacity:0; transform:scale(1.08);
+    transition:opacity .35s ease; }
   .ph { position:absolute; inset:-6%; background-size:cover; background-position:center;
         opacity:0; transition:opacity 1s ease; }
   .ph.on { opacity:1; }
   .ph.kb { animation: kenburns 24s ease-in-out infinite alternate; }
+  /* macOS vibrant is not a cemetery-style opaque grayscale conversion.  Keep
+     the photo's luminance as a light, translucent layer while the shared mono
+     card material (Mica + local Gaussian blur) remains visible beneath it. */
+  html.mono .live-face { background:rgba(255,255,255,.10); }
+  html.mono .live-face::before { opacity:.58; filter:blur(26px) saturate(.92) brightness(.92); }
+  html.mono .ph.on { opacity:.46; filter:grayscale(1) contrast(.84) brightness(1.28); mix-blend-mode:screen; }
+  html.dark.mono .ph.on { opacity:.42; mix-blend-mode:luminosity; }
   @keyframes kenburns { from { transform: scale(1) } to { transform: scale(1.09) translate(1.4%, -1.4%) } }
 
   /* 占位脸（无图）：原星空卡 + 提示 */
@@ -60,7 +71,7 @@
 <div class="card"><div class="content">
   <div class="flip">
     <div class="face front">
-      <div class="live-face"><div class="ph" id="p0"></div><div class="ph" id="p1"></div></div>
+      <div class="live-face" id="live"><div class="ph" id="p0"></div><div class="ph" id="p1"></div></div>
       <div class="empty-face">
         <div class="art"></div>
         <div class="stars" id="st"></div>
@@ -96,7 +107,9 @@
     const back = 1 - front;
     const img = new Image();
     img.onload = () => {
-      layers[back].style.backgroundImage = `url("${url(n)}")`;
+      const imageUrl = `url("${url(n)}")`;
+      $('live').style.setProperty('--active-photo', imageUrl);
+      layers[back].style.backgroundImage = imageUrl;
       layers[back].classList.add('on', 'kb');
       layers[front].classList.remove('on');
       front = back;

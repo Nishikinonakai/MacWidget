@@ -3,12 +3,12 @@
 <style>
   /* 组件库：搜索 + 分类栏 + Suggestions + 实时预览。窗口即最终矩形，内容自行滑入。 */
   :root {
-    --bg: rgba(242,240,244,.86); --fg: #1d1d1f; --fg2: #6E6E73;
+    --bg: rgba(242,240,244,.74); --fg: #1d1d1f; --fg2: #6E6E73;
     --inset-bg: rgba(0,0,0,.055); --sel: rgba(0,0,0,.08); --sel-hover: rgba(0,0,0,.055);
     --hair: rgba(0,0,0,.08); --card: rgba(255,255,255,.48); --done-bg: #0A84FF; --done-fg: #fff;
   }
   html.dark {
-    --bg: rgba(40,40,45,.88); --fg: #f2f2f5; --fg2: rgba(255,255,255,.6);
+    --bg: rgba(40,40,45,.74); --fg: #f2f2f5; --fg2: rgba(255,255,255,.6);
     --inset-bg: rgba(255,255,255,.08); --sel: rgba(255,255,255,.14); --sel-hover: rgba(255,255,255,.075);
     --hair: rgba(255,255,255,.09); --card: rgba(255,255,255,.055); --done-bg: #5A6A70;
   }
@@ -20,8 +20,9 @@
     -webkit-user-select:none; user-select:none; color:var(--fg); }
   .panel { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg);
     border-radius:16px 16px 0 0; box-shadow:0 -6px 32px rgba(0,0,0,.28), inset 0 .5px 0 rgba(255,255,255,.35);
-    transform:translateY(104%); transition:transform .3s cubic-bezier(.2,.8,.25,1); }
+    transform:translateY(104%); transition:transform .3s cubic-bezier(.2,.8,.25,1), opacity .18s ease; }
   html.show .panel { transform:translateY(0); }
+  html.picking .panel { opacity:0; pointer-events:none; }
 
   .main { flex:1; display:flex; min-height:0; }
   aside { flex:0 0 224px; padding:14px 12px; border-right:.5px solid var(--hair); display:flex; flex-direction:column; gap:12px; }
@@ -88,7 +89,6 @@
         <button class="navitem" data-category="info" aria-pressed="false"><span class="symbol">◌</span>信息</button>
         <button class="navitem" data-category="media" aria-pressed="false"><span class="symbol">▶</span>媒体</button>
       </nav>
-      <div class="sidebar-note">选择一种组件后，将它拖到桌面上的任意位置。</div>
     </aside>
     <section>
       <div class="suggest-wrap" id="suggestWrap">
@@ -197,6 +197,8 @@
       tintFrames(); renderSuggestions(); applyFilter();
     } else if (m.t === 'show') { requestAnimationFrame(() => document.documentElement.classList.add('show')); q.focus(); }
     else if (m.t === 'hide') document.documentElement.classList.remove('show');
+    else if (m.t === 'pickup') document.documentElement.classList.add('picking');
+    else if (m.t === 'drop') document.documentElement.classList.remove('picking');
   });
   document.getElementById('done').addEventListener('click', () => post({ t:'done' }));
   addEventListener('keydown', e => { if (e.key === 'Escape') post({ t:'done' }); });
