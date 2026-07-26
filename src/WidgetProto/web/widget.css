@@ -52,13 +52,16 @@ html, body {
   opacity: 1; transition: opacity .3s ease;
 }
 html.mono .card {
-  background: rgba(82,80,87,.66);
-  /* The native Mica surface below this transparent card supplies the sampled
+  background: rgba(70,68,76,.18);
+  /* The native Acrylic surface below this transparent card supplies the sampled
      desktop.  The local blur avoids a flat, gray overlay when the wallpaper
      changes beneath a widget. */
-  -webkit-backdrop-filter: blur(22px) saturate(.82);
-  backdrop-filter: blur(22px) saturate(.82);
+  -webkit-backdrop-filter: blur(26px) saturate(.92);
+  backdrop-filter: blur(26px) saturate(.92);
 }
+/* Installed desktop widgets use a card-sized HWND. Gallery previews keep the
+   8px design gutter because they are rendered inside a larger preview tile. */
+html.mw-hosted .card { inset: 0; }
 html.mono .card::before { opacity: 0; }
 html.noeffects.mono .card { background: #5f5d63; -webkit-backdrop-filter:none; backdrop-filter:none; }
 

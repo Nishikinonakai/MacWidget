@@ -3,12 +3,12 @@
 <style>
   /* 组件库：搜索 + 分类栏 + Suggestions + 实时预览。窗口即最终矩形，内容自行滑入。 */
   :root {
-    --bg: rgba(242,240,244,.74); --fg: #1d1d1f; --fg2: #6E6E73;
+    --bg: rgba(242,240,244,.20); --top-veil: rgba(242,240,244,.68); --fg: #1d1d1f; --fg2: #6E6E73;
     --inset-bg: rgba(0,0,0,.055); --sel: rgba(0,0,0,.08); --sel-hover: rgba(0,0,0,.055);
     --hair: rgba(0,0,0,.08); --card: rgba(255,255,255,.48); --done-bg: #0A84FF; --done-fg: #fff;
   }
   html.dark {
-    --bg: rgba(40,40,45,.74); --fg: #f2f2f5; --fg2: rgba(255,255,255,.6);
+    --bg: rgba(40,40,45,.24); --top-veil: rgba(40,40,45,.70); --fg: #f2f2f5; --fg2: rgba(255,255,255,.6);
     --inset-bg: rgba(255,255,255,.08); --sel: rgba(255,255,255,.14); --sel-hover: rgba(255,255,255,.075);
     --hair: rgba(255,255,255,.09); --card: rgba(255,255,255,.055); --done-bg: #5A6A70;
   }
@@ -18,13 +18,15 @@
   html, body { background:transparent; width:100%; height:100%; overflow:hidden;
     font-family:"Segoe UI Variable Display","Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif;
     -webkit-user-select:none; user-select:none; color:var(--fg); }
-  .panel { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg);
+  .panel { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; isolation:isolate;
     border-radius:16px 16px 0 0; box-shadow:0 -6px 32px rgba(0,0,0,.28), inset 0 .5px 0 rgba(255,255,255,.35);
-    transform:translateY(104%); transition:transform .3s cubic-bezier(.2,.8,.25,1), opacity .18s ease; }
-  html.show .panel { transform:translateY(0); }
+    transition:opacity .18s ease; }
+  .panel::after { content:""; position:absolute; z-index:50; pointer-events:none; left:0; right:0; top:0; height:22px;
+    border-radius:16px 16px 0 0; background:linear-gradient(to bottom,var(--top-veil) 0%,rgba(0,0,0,0) 100%);
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.42); }
   html.picking .panel { opacity:0; pointer-events:none; }
 
-  .main { flex:1; display:flex; min-height:0; }
+  .main { flex:1; display:flex; min-height:0; overflow:hidden; position:relative; z-index:1; }
   aside { flex:0 0 224px; padding:14px 12px; border-right:.5px solid var(--hair); display:flex; flex-direction:column; gap:12px; }
   .search { display:flex; align-items:center; gap:6px; background:var(--inset-bg); border-radius:8px; padding:6px 9px; }
   .search svg { flex:0 0 auto; opacity:.45; }
@@ -41,7 +43,7 @@
   .navitem.active .symbol { color:var(--fg); }
   .sidebar-note { margin-top:auto; padding:0 9px; color:var(--fg2); font-size:11.5px; line-height:1.45; }
 
-  section { flex:1; overflow-y:auto; padding:16px 22px 12px; }
+  section { flex:1; overflow-y:auto; padding:22px 22px 12px; position:relative; }
   section::-webkit-scrollbar { width:8px; } section::-webkit-scrollbar-thumb { background:var(--inset-bg); border-radius:4px; }
   .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:13px; }
   h4 { font-size:13px; font-weight:650; color:var(--fg); }
@@ -68,7 +70,7 @@
   .empty { display:none; padding:28px 0; color:var(--fg2); font-size:13px; }
   .empty.show { display:block; }
 
-  footer { flex:0 0 52px; display:flex; align-items:center; gap:16px; padding:0 18px; border-top:.5px solid var(--hair); }
+  footer { flex:0 0 52px; display:flex; align-items:center; gap:16px; padding:0 18px; border-top:.5px solid var(--hair); position:relative; z-index:2; }
   footer .hint { flex:1; font-size:13px; color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #done { border:0; outline:0; cursor:pointer; font:inherit; font-size:13px; font-weight:650; color:var(--done-fg);
     background:var(--done-bg); border-radius:8px; padding:7px 22px; }
@@ -82,17 +84,17 @@
         <svg width="13" height="13" viewBox="0 0 13 13"><circle cx="5.5" cy="5.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="9" y1="9" x2="12.2" y2="12.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <input id="q" type="text" placeholder="搜索组件" autocomplete="off" aria-label="搜索组件">
       </div>
-      <div class="nav-label">浏览</div>
+      <div class="nav-label" id="browseLabel">浏览</div>
       <nav class="nav" id="nav" aria-label="组件分类">
-        <button class="navitem active" data-category="all" aria-pressed="true"><span class="symbol">▦</span>全部组件</button>
-        <button class="navitem" data-category="schedule" aria-pressed="false"><span class="symbol">◷</span>日程</button>
-        <button class="navitem" data-category="info" aria-pressed="false"><span class="symbol">◌</span>信息</button>
-        <button class="navitem" data-category="media" aria-pressed="false"><span class="symbol">▶</span>媒体</button>
+        <button class="navitem active" data-category="all" aria-pressed="true"><span class="symbol">▦</span><span class="nav-text">全部组件</span></button>
+        <button class="navitem" data-category="schedule" aria-pressed="false"><span class="symbol">◷</span><span class="nav-text">日程</span></button>
+        <button class="navitem" data-category="info" aria-pressed="false"><span class="symbol">◌</span><span class="nav-text">信息</span></button>
+        <button class="navitem" data-category="media" aria-pressed="false"><span class="symbol">▶</span><span class="nav-text">媒体</span></button>
       </nav>
     </aside>
     <section>
       <div class="suggest-wrap" id="suggestWrap">
-        <div class="section-head"><h4>精选推荐</h4><span class="count">根据当前桌面</span></div>
+        <div class="section-head"><h4 id="suggestionTitle">精选推荐</h4><span class="count" id="suggestionCount">根据当前桌面</span></div>
         <div class="suggestions" id="suggestions"></div>
       </div>
       <div class="section-head"><h4 id="title">全部组件</h4><span class="count" id="count"></span></div>
@@ -100,19 +102,19 @@
       <div class="empty" id="empty">没有符合条件的组件。</div>
     </section>
   </div>
-  <footer><div class="hint">将组件拖到桌面上的任意位置来放置…</div><button id="done">完成</button></footer>
+  <footer><div class="hint" id="footerHint">将组件拖到桌面上的任意位置来放置…</div><button id="done">完成</button></footer>
 </div>
 <script>
   const WIDGETS = [
-    { kind:'clock',    name:'时钟',     category:'schedule', w:180, h:180, glyph:'◷', detail:'时间与世界时钟', accent:'#E96A66' },
-    { kind:'calendar', name:'日历',     category:'schedule', w:180, h:180, glyph:'▦', detail:'日期与月历', accent:'#E96A66' },
-    { kind:'monitor',  name:'系统监视', category:'info',     w:180, h:180, glyph:'◌', detail:'CPU、内存与磁盘', accent:'#5D93F7' },
-    { kind:'battery',  name:'电池',     category:'info',     w:180, h:180, glyph:'▰', detail:'电量与充电状态', accent:'#58A968' },
-    { kind:'music',    name:'正在播放', category:'media',    w:360, h:180, glyph:'♫', detail:'媒体播放控制', accent:'#B47BE8' },
-    { kind:'weather',  name:'天气',     category:'info',     w:360, h:180, glyph:'☀', detail:'当前天气与预报', accent:'#E99C34' },
-    { kind:'photo',    name:'照片',     category:'media',    w:360, h:360, glyph:'▧', detail:'文件夹照片轮播', accent:'#C1785E' },
+    { kind:'clock',    zh:'时钟', en:'Clock', category:'schedule', w:180, h:180, glyph:'◷', detailZh:'时间与世界时钟', detailEn:'Time and world clocks', accent:'#E96A66' },
+    { kind:'calendar', zh:'日历', en:'Calendar', category:'schedule', w:180, h:180, glyph:'▦', detailZh:'日期与月历', detailEn:'Date and month view', accent:'#E96A66' },
+    { kind:'monitor',  zh:'系统监视', en:'System Monitor', category:'info', w:180, h:180, glyph:'◌', detailZh:'CPU、内存与磁盘', detailEn:'CPU, memory, and disk', accent:'#5D93F7' },
+    { kind:'battery',  zh:'电池', en:'Battery', category:'info', w:180, h:180, glyph:'▰', detailZh:'电量与充电状态', detailEn:'Battery and charging', accent:'#58A968' },
+    { kind:'music',    zh:'正在播放', en:'Now Playing', category:'media', w:360, h:180, glyph:'♫', detailZh:'媒体播放控制', detailEn:'Media controls', accent:'#B47BE8' },
+    { kind:'weather',  zh:'天气', en:'Weather', category:'info', w:360, h:180, glyph:'☀', detailZh:'当前天气与预报', detailEn:'Current conditions and forecast', accent:'#E99C34' },
+    { kind:'photo',    zh:'照片', en:'Photos', category:'media', w:360, h:360, glyph:'▧', detailZh:'文件夹照片轮播', detailEn:'Photo-folder slideshow', accent:'#C1785E' },
   ];
-  const CATEGORY = { all:'全部组件', schedule:'日程', info:'信息', media:'媒体' };
+  const CATEGORY = { zh:{ all:'全部组件', schedule:'日程', info:'信息', media:'媒体' }, en:{ all:'All Widgets', schedule:'Schedule', info:'Information', media:'Media' } };
   const SUGGESTION_ORDER = ['weather', 'calendar', 'photo', 'music'];
   const SCALE = .78;
   const grid = document.getElementById('grid');
@@ -124,28 +126,50 @@
   const suggestions = document.getElementById('suggestions');
   let active = 'all';
   let installed = new Set();
+  let lang = 'zh';
+  const nameOf = w => w[lang];
+  const detailOf = w => w[lang === 'en' ? 'detailEn' : 'detailZh'];
 
-  grid.innerHTML = WIDGETS.map(w => `
-    <div class="cell pickable" role="listitem" data-kind="${w.kind}" data-category="${w.category}" data-name="${w.name} ${w.kind}">
-      <div class="prev" style="width:${w.w*SCALE}px;height:${w.h*SCALE}px">
-        <iframe src="${w.kind}.html" width="${w.w}" height="${w.h}" style="transform:scale(${SCALE})"></iframe>
-      </div><div class="name">${w.name}</div>
-    </div>`).join('');
+  function renderGrid() {
+    grid.innerHTML = WIDGETS.map(w => `
+      <div class="cell pickable" role="listitem" data-kind="${w.kind}" data-category="${w.category}" data-name="${w.zh} ${w.en} ${w.kind}">
+        <div class="prev" style="width:${w.w*SCALE}px;height:${w.h*SCALE}px">
+          <iframe src="${w.kind}.html" width="${w.w}" height="${w.h}" style="transform:scale(${SCALE})"></iframe>
+        </div><div class="name">${nameOf(w)}</div>
+      </div>`).join('');
+    document.querySelectorAll('iframe').forEach(f => f.addEventListener('load', tintFrames));
+  }
 
   const post = m => window.chrome?.webview?.postMessage(m);
 
   // 预览恒全彩，只跟随深浅外观（macOS 组件库语义）。
   function tintFrames() {
     const dark = document.documentElement.classList.contains('dark');
-    document.querySelectorAll('iframe').forEach(f => { try { f.contentDocument?.documentElement?.classList.toggle('dark', dark); } catch {} });
+    document.querySelectorAll('iframe').forEach(f => {
+      try {
+        const doc = f.contentDocument;
+        doc?.documentElement?.classList.toggle('dark', dark);
+        if (lang === 'en' && doc?.body) translatePreview(doc.body);
+      } catch {}
+    });
   }
-  document.querySelectorAll('iframe').forEach(f => f.addEventListener('load', tintFrames));
-
+  function translatePreview(root) {
+    const pairs = {
+      '杭州':'Hangzhou','东京':'Tokyo','伦敦':'London','纽约':'New York',
+      '星期日':'Sunday','星期一':'Monday','星期二':'Tuesday','星期三':'Wednesday','星期四':'Thursday','星期五':'Friday','星期六':'Saturday',
+      '内存':'Memory','磁盘':'Disk','没有播放内容':'Nothing playing','无电池':'No battery','电池':'Battery',
+      '照片':'Photos','右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder',
+      '晴':'Clear','现在':'Now','最高':'High','最低':'Low'
+    };
+    const replace = s => Object.entries(pairs).reduce((v,[zh,en]) => v.split(zh).join(en),s);
+    const walk = n => { if (n.nodeType === Node.TEXT_NODE) n.nodeValue=replace(n.nodeValue); else n.childNodes?.forEach(walk); };
+    walk(root);
+  }
   function renderSuggestions() {
     const missing = SUGGESTION_ORDER.filter(kind => !installed.has(kind));
     const picks = (missing.length ? missing : SUGGESTION_ORDER).slice(0, 3).map(kind => WIDGETS.find(w => w.kind === kind));
-    suggestions.innerHTML = picks.map(w => `<button class="suggestion pickable" data-kind="${w.kind}" style="--accent:${w.accent}" aria-label="拖出${w.name}">
-      <span class="glyph">${w.glyph}</span><span class="name">${w.name}</span><span class="detail">${w.detail}</span>
+    suggestions.innerHTML = picks.map(w => `<button class="suggestion pickable" data-kind="${w.kind}" style="--accent:${w.accent}" aria-label="${lang === 'en' ? 'Drag ' : '拖出'}${nameOf(w)}">
+      <span class="glyph">${w.glyph}</span><span class="name">${nameOf(w)}</span><span class="detail">${detailOf(w)}</span>
     </button>`).join('');
   }
 
@@ -159,8 +183,8 @@
       cell.classList.toggle('hide', !visible);
       if (visible) shown++;
     });
-    title.textContent = term ? `搜索结果：${q.value.trim()}` : CATEGORY[active];
-    count.textContent = `${shown} 个组件`;
+    title.textContent = term ? `${lang === 'en' ? 'Search results: ' : '搜索结果：'}${q.value.trim()}` : CATEGORY[lang][active];
+    count.textContent = lang === 'en' ? `${shown} widget${shown === 1 ? '' : 's'}` : `${shown} 个组件`;
     empty.classList.toggle('show', shown === 0);
     suggestWrap.classList.toggle('hide', active !== 'all' || !!term);
   }
@@ -172,6 +196,22 @@
     applyFilter();
   });
   q.addEventListener('input', applyFilter);
+
+  function setLanguage(next) {
+    lang = next === 'en' ? 'en' : 'zh';
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+    q.placeholder = lang === 'en' ? 'Search widgets' : '搜索组件';
+    q.setAttribute('aria-label', q.placeholder);
+    document.getElementById('browseLabel').textContent = lang === 'en' ? 'Browse' : '浏览';
+    document.getElementById('nav').setAttribute('aria-label', lang === 'en' ? 'Widget categories' : '组件分类');
+    document.querySelectorAll('.navitem').forEach(item => item.querySelector('.nav-text').textContent = CATEGORY[lang][item.dataset.category]);
+    document.getElementById('suggestionTitle').textContent = lang === 'en' ? 'Featured' : '精选推荐';
+    document.getElementById('suggestionCount').textContent = lang === 'en' ? 'Based on your desktop' : '根据当前桌面';
+    empty.textContent = lang === 'en' ? 'No matching widgets.' : '没有符合条件的组件。';
+    document.getElementById('footerHint').textContent = lang === 'en' ? 'Drag a widget anywhere on the desktop.' : '将组件拖到桌面上的任意位置来放置…';
+    document.getElementById('done').textContent = lang === 'en' ? 'Done' : '完成';
+    renderGrid(); renderSuggestions(); applyFilter(); tintFrames();
+  }
 
   // 拖出放置：位移 >6px 即交棒宿主（宿主用真实光标循环接管，网页端不再跟踪）。
   let pick = null, px = 0, py = 0;
@@ -194,7 +234,7 @@
       if (typeof m.accent === 'string' && /^#[0-9a-f]{6}$/i.test(m.accent))
         document.documentElement.style.setProperty('--done-bg', m.accent);
       installed = new Set(m.installed || []);
-      tintFrames(); renderSuggestions(); applyFilter();
+      setLanguage(m.lang);
     } else if (m.t === 'show') { requestAnimationFrame(() => document.documentElement.classList.add('show')); q.focus(); }
     else if (m.t === 'hide') document.documentElement.classList.remove('show');
     else if (m.t === 'pickup') document.documentElement.classList.add('picking');
@@ -203,6 +243,6 @@
   document.getElementById('done').addEventListener('click', () => post({ t:'done' }));
   addEventListener('keydown', e => { if (e.key === 'Escape') post({ t:'done' }); });
   addEventListener('contextmenu', e => e.preventDefault());
-  renderSuggestions(); applyFilter();
+  setLanguage('zh');
 </script>
 </body></html>

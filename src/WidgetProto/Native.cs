@@ -183,6 +183,12 @@ public static class Dwm
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref v, 4);
     }
 
+    public static void SetSquareCorners(IntPtr hwnd)
+    {
+        int v = 1; // DWMWCP_DONOTROUND: the application supplies the exact region
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref v, 4);
+    }
+
     public static void SetDark(IntPtr hwnd, bool on)
     {
         int v = on ? 1 : 0;
@@ -191,7 +197,8 @@ public static class Dwm
 
     public static void SetBackdrop(IntPtr hwnd, string kind)
     {
-        if (kind is "wca" or "wcablur") { Wca.Apply(hwnd, kind); return; }
+        if (kind is "wca" or "wcalight" or "wcablur") { Wca.Apply(hwnd, kind); return; }
+        Wca.Clear(hwnd);
         int v = kind switch { "mica" => 2, "acrylic" => 3, "tabbed" => 4, _ => 1 };
         var hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref v, 4);
         Program.Log($"backdrop {kind}({v}) hr=0x{hr:x}");
@@ -220,7 +227,9 @@ public static class Wca
         {
             State = kind == "wcablur" ? 3 : 4,
             Flags = 2,
-            GradientColor = 0x40202020,   // AABBGGRR：25% 深灰 tint（acrylic 态要求非零 alpha）
+            // AABBGGRR. Keep a non-zero tint (required by acrylic) without
+            // covering the sampled wallpaper colour with a flat gray layer.
+            GradientColor = kind == "wcalight" ? 0x20FFFFFFu : 0x28202020u,
         };
         var pin = Marshal.AllocHGlobal(Marshal.SizeOf<ACCENT_POLICY>());
         try
@@ -229,6 +238,19 @@ public static class Wca
             var data = new WINCOMPATTRDATA { Attribute = 19 /*WCA_ACCENT_POLICY*/, Data = pin, Size = Marshal.SizeOf<ACCENT_POLICY>() };
             var r = SetWindowCompositionAttribute(hwnd, ref data);
             Program.Log($"wca {kind} ret={r}");
+        }
+        finally { Marshal.FreeHGlobal(pin); }
+    }
+
+    public static void Clear(IntPtr hwnd)
+    {
+        var pol = new ACCENT_POLICY();
+        var pin = Marshal.AllocHGlobal(Marshal.SizeOf<ACCENT_POLICY>());
+        try
+        {
+            Marshal.StructureToPtr(pol, pin, false);
+            var data = new WINCOMPATTRDATA { Attribute = 19, Data = pin, Size = Marshal.SizeOf<ACCENT_POLICY>() };
+            SetWindowCompositionAttribute(hwnd, ref data);
         }
         finally { Marshal.FreeHGlobal(pin); }
     }

@@ -68,6 +68,7 @@
   function apply(s) {
     const H = document.documentElement;
     if (!H) { pending = Object.assign(pending || {}, s); return; }
+    H.classList.add('mw-hosted');
     if ('dark' in s) H.classList.toggle('dark', !!s.dark);
     if ('mono' in s) H.classList.toggle('mono', !!s.mono);
     if ('effects' in s) H.classList.toggle('noeffects', !s.effects);

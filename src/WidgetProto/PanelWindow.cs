@@ -18,17 +18,17 @@ public sealed class PanelWindow : Window
 
     CoreWebView2? _core;
     bool _pendingShow;
-    System.Windows.Threading.DispatcherTimer? _hideTimer;
     System.Windows.Threading.DispatcherTimer? _deactivateCheck;
+    System.Windows.Threading.DispatcherTimer? _windowAnimation;
+    Rect _shownRect;
 
     PanelWindow()
     {
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        // A non-layered DWM backdrop is always an HWND-sized rectangle.  The
-        // gallery animates independently, so use a layered composition surface
-        // to keep each animation frame clipped to the rounded HTML panel.
-        AllowsTransparency = true;
+        // The HWND itself moves with the panel animation. This keeps the native
+        // acrylic surface and the visible rounded panel in the same rectangle.
+        AllowsTransparency = false;
         ShowInTaskbar = false;
         ShowActivated = true;      // 搜索框要键盘
         Topmost = true;
@@ -44,8 +44,11 @@ public sealed class PanelWindow : Window
             var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
             ex |= Native.WS_EX_TOOLWINDOW;
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
+            Dwm.ExtendIntoClient(h);
             Dwm.SetDark(h, ColorMode.Dark);
-            Dwm.SetBackdrop(h, "none");
+            Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? PanelMaterial() : "none");
+            Dwm.SetSquareCorners(h);
+            Native.ApplyRoundedRegion(h, 16);
         };
         Loaded += OnLoaded;
         Closed += (_, _) => Existing = null;
@@ -100,7 +103,7 @@ public sealed class PanelWindow : Window
 
     public void ShowPanel()
     {
-        _hideTimer?.Stop();
+        _windowAnimation?.Stop();
         // 编辑是从当前鼠标所在桌面进入的；面板应留在那块屏幕，而不是总回主屏。
         Native.GetCursorPos(out var cursor);
         var display = DisplayTopology.ForPoint(new Point(cursor.X, cursor.Y));
@@ -110,11 +113,17 @@ public sealed class PanelWindow : Window
         double pw = Width * display.Scale, ph = Height * display.Scale;
         double px = display.Work.Left + Math.Round((display.Work.Width - pw) / 2);
         double py = display.Work.Bottom - ph;
+        _shownRect = new Rect(px, py, pw, ph);
+        bool wasVisible = IsVisible;
         Left = 0; Top = 0;
         Show();
         if (PresentationSource.FromVisual(this) is HwndSource src)
-            Native.MoveWindow(src.Handle, (int)Math.Round(px), (int)Math.Round(py),
-                (int)Math.Round(pw), (int)Math.Round(ph), true);
+        {
+            var from = wasVisible ? DisplayTopology.RectOf(src.Handle)
+                : new Rect(px, display.Work.Bottom, pw, ph);
+            MovePanel(src.Handle, from);
+            AnimatePanel(src.Handle, from, _shownRect, hideAtEnd: false);
+        }
         Activate();
         if (_core == null) { _pendingShow = true; return; }
         PostShow();
@@ -129,10 +138,10 @@ public sealed class PanelWindow : Window
     public void HidePanel()
     {
         Post("""{"t":"hide"}""");
-        _hideTimer?.Stop();
-        _hideTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(320) };
-        _hideTimer.Tick += (_, _) => { _hideTimer!.Stop(); Hide(); };
-        _hideTimer.Start();
+        if (!IsVisible || PresentationSource.FromVisual(this) is not HwndSource src) { Hide(); return; }
+        var from = DisplayTopology.RectOf(src.Handle);
+        var to = new Rect(_shownRect.Left, _shownRect.Bottom, _shownRect.Width, _shownRect.Height);
+        AnimatePanel(src.Handle, from, to, hideAtEnd: true);
     }
 
     public void PushState()
@@ -140,7 +149,8 @@ public sealed class PanelWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource src)
         {
             Dwm.SetDark(src.Handle, ColorMode.Dark);
-            Dwm.SetBackdrop(src.Handle, "none");
+            Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? PanelMaterial() : "none");
+            Native.ApplyRoundedRegion(src.Handle, 16);
         }
         var installed = Application.Current.Windows.OfType<WidgetWindow>()
             .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
@@ -150,11 +160,14 @@ public sealed class PanelWindow : Window
             dark = ColorMode.Dark,
             effects = ColorMode.TransparencyEnabled,
             accent = MacDeskAppearance.PanelAccentCss(),
+            lang = ProductSettings.English ? "en" : "zh",
             installed,
         }));
     }
 
     void Post(string json) { try { _core?.PostWebMessageAsJson(json); } catch { } }
+
+    static string PanelMaterial() => ColorMode.Dark ? "wca" : "wcalight";
 
     void OnWebMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -190,6 +203,7 @@ public sealed class PanelWindow : Window
         ww.Show();
         _pick = ww;
         Post("""{"t":"pickup"}""");
+        AnimateForPickup(hide: true);
         Program.Log($"panel pickup {kind}");
         _pickTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _pickTimer.Tick += (_, _) => PickTick();
@@ -215,8 +229,7 @@ public sealed class PanelWindow : Window
         // 松手：面板范围内 = 取消（拖回收回），其余按引擎落位
         _pickTimer!.Stop(); _pickTimer = null;
         GhostWindow.Instance.HideGhost();
-        var panel = PresentationSource.FromVisual(this) is HwndSource source
-            ? DisplayTopology.RectOf(source.Handle) : Rect.Empty;
+        var panel = _shownRect;
         bool overPanel = IsVisible && panel.Contains(new Point(pt.X, pt.Y));
         if (overPanel)
         {
@@ -231,7 +244,47 @@ public sealed class PanelWindow : Window
         }
         _pick = null;
         Post("""{"t":"drop"}""");
+        AnimateForPickup(hide: false);
         PushState(); // 放置或取消后刷新 Suggestions，优先推荐尚未摆到桌面的组件。
+    }
+
+    void AnimateForPickup(bool hide)
+    {
+        if (!IsVisible || PresentationSource.FromVisual(this) is not HwndSource src || _shownRect.IsEmpty) return;
+        var current = DisplayTopology.RectOf(src.Handle);
+        var hidden = new Rect(_shownRect.Left, _shownRect.Bottom, _shownRect.Width, _shownRect.Height);
+        AnimatePanel(src.Handle, current, hide ? hidden : _shownRect, hideAtEnd: false);
+    }
+
+    void AnimatePanel(IntPtr hwnd, Rect from, Rect to, bool hideAtEnd)
+    {
+        _windowAnimation?.Stop();
+        var started = DateTime.UtcNow;
+        _windowAnimation = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16),
+        };
+        _windowAnimation.Tick += (_, _) =>
+        {
+            double t = Math.Clamp((DateTime.UtcNow - started).TotalMilliseconds / 280.0, 0, 1);
+            double eased = 1 - Math.Pow(1 - t, 3);
+            var frame = new Rect(
+                from.Left + (to.Left - from.Left) * eased,
+                from.Top + (to.Top - from.Top) * eased,
+                to.Width, to.Height);
+            MovePanel(hwnd, frame);
+            if (t < 1) return;
+            _windowAnimation!.Stop();
+            if (hideAtEnd) Hide();
+        };
+        _windowAnimation.Start();
+    }
+
+    static void MovePanel(IntPtr hwnd, Rect frame)
+    {
+        Native.MoveWindow(hwnd, (int)Math.Round(frame.Left), (int)Math.Round(frame.Top),
+            (int)Math.Round(frame.Width), (int)Math.Round(frame.Height), true);
+        Native.ApplyRoundedRegion(hwnd, 16);
     }
 
 }

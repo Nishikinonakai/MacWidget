@@ -10,6 +10,9 @@ namespace WidgetProto;
 
 public sealed class WidgetWindow : Window
 {
+    const double CardInset = 8;
+    const double CardRadius = 20;
+
     readonly int _i;
     readonly bool _startLifted;
     readonly DisplayTopology.Position? _initialPosition;
@@ -46,8 +49,11 @@ public sealed class WidgetWindow : Window
         Background = Brushes.Transparent;
         Title = $"MacWidget {i} {kind}";
 
-        // 窗口 = 帧（摆放/避让/组格距的原子单位）；可视卡由页面 CSS 画（内衬 8、圆角 20、阴影）
-        (Width, Height) = WidgetRegistry.Size(kind, SizeClass);
+        // The old HWND included the CSS shadow gutter.  A non-layered DWM
+        // backdrop paints that gutter, which is the white/gray rectangle seen
+        // around every card.  Make the native surface the card itself; grid
+        // positions keep the 16-DIP spacing between neighbouring widgets.
+        (Width, Height) = CardSize(kind, SizeClass);
 
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = 0; Top = 0; // hWnd 建好后统一走物理像素定位，混合 DPI 不能用 Left/Top 跨屏。
@@ -89,14 +95,17 @@ public sealed class WidgetWindow : Window
         // 透明表面防黑底必须 extend（macwidget 已踩）；圆角不再走 DWM（系统 8px 与卡 20pt 不符，CSS 接管）
         if (Program.Opts.Glass == "extend") Dwm.ExtendIntoClient(h);
         Dwm.SetDark(h, Program.Opts.Appearance == "light" ? false : Program.Opts.Dark);
-        Dwm.SetRoundCorners(h);
-        Native.ApplyRoundedInsetRegion(h, 8, 20);
+        // One owner for the outline: the Win32 region matches widget.css's
+        // inset/radius exactly.  DWM's independent 8px corner caused a second
+        // white/gray outline around the 20px web card.
+        Dwm.SetSquareCorners(h);
+        Native.ApplyRoundedRegion(h, CardRadius);
         if (Program.Opts.Backdrop != "none") Dwm.SetBackdrop(h, Program.Opts.Backdrop);   // 实验对照保留
 
         if (Program.Opts.Pin == "bottom") BottomPin.Install(src);
         if (_startLifted) BottomPin.Lift(h);
         if (Program.Opts.NoActivate) src.AddHook(NoActivateHook);
-        SizeChanged += (_, _) => Native.ApplyRoundedInsetRegion(h, 8, 20);
+        SizeChanged += (_, _) => Native.ApplyRoundedRegion(h, CardRadius);
         if (_initialPosition is { } pos) MoveToPhysical(RectFor(pos));
     }
 
@@ -217,10 +226,14 @@ public sealed class WidgetWindow : Window
         if (PresentationSource.FromVisual(this) is HwndSource src)
         {
             Dwm.SetDark(src.Handle, dark);
-            // In mono the native Mica surface supplies the sampled material;
+            // In mono the native Acrylic surface supplies the sampled material;
             // widget.css deliberately leaves the card translucent so it is
             // visible instead of being hidden behind an opaque color fill.
-            Dwm.SetBackdrop(src.Handle, effects && mono ? "mica" : Program.Opts.Backdrop);
+            // Acrylic exposes wallpaper colour more clearly than Mica's heavily
+            // tinted base layer. Reapply the exact card region afterwards:
+            // changing the system backdrop can reset the compositor clip.
+            Dwm.SetBackdrop(src.Handle, effects && mono ? "wca" : Program.Opts.Backdrop);
+            Native.ApplyRoundedRegion(src.Handle, CardRadius);
         }
         var s = (dark, mono, effects, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
@@ -262,7 +275,7 @@ public sealed class WidgetWindow : Window
     {
         if (size == SizeClass || !WidgetRegistry.SizesOf(Kind).Contains(size)) return;
         SizeClass = size;
-        (Width, Height) = WidgetRegistry.Size(Kind, size);
+        (Width, Height) = CardSize(Kind, size);
         Program.Log($"widget {_i} ({Kind}) size -> {size}");
         // WPF 会在本轮布局后才把 DIU 尺寸落实到当前屏的物理尺寸。
         _ = Dispatcher.BeginInvoke(() =>
@@ -420,6 +433,12 @@ public sealed class WidgetWindow : Window
     }
 
     IntPtr Hwnd() => ((HwndSource)PresentationSource.FromVisual(this)!).Handle;
+
+    static (double Width, double Height) CardSize(string kind, string size)
+    {
+        var (width, height) = WidgetRegistry.Size(kind, size);
+        return (width - CardInset * 2, height - CardInset * 2);
+    }
 
     /// <summary>当前帧的真实虚拟桌面物理矩形；这是避让、跨屏摆位与持久化的共同坐标系。</summary>
     public Rect PhysicalBounds => PresentationSource.FromVisual(this) is HwndSource src
