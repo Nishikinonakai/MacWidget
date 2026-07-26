@@ -118,6 +118,12 @@ Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runti
 & .\MacWidget.exe --appearance dark --style mono
 ```
 
+还要临时将 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\EnableTransparency`
+置为 `0`（先记录原值，测试后立即还原），再执行亮/暗两组。期望日志为
+`transparency=False` 和 `backdrop none(1)`，组件库、托盘和右键菜单都应是可读的不透明表面，
+不能留下半透明残影。若要模拟用户未安装 MacDesk 的独立体验，给临时副本加
+`--without-macdesk`：它禁用 MacDesk 命名事件、避让管道及强调色读取，组件库的完成按钮应回退系统蓝。
+
 接入第二个逻辑显示器后先运行只读观测器；它使用 `EnumDisplayMonitors` 并把调用线程设为 PMv2，
 不能用遗留 `Win32_DesktopMonitor` 的计数代替。相同 EDID 的双 HDMI 输入应报告两个 `DISPLAYn` 路径，
 MacWidget 启动日志应使用 `EDID@DISPLAYn` 作为稳定布局键。随后至少验证：两个显示器各有一枚组件、

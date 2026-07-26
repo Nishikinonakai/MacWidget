@@ -13,6 +13,7 @@ namespace WidgetProto;
 public static class ColorMode
 {
     public static bool Dark { get; private set; } = true;
+    public static bool TransparencyEnabled { get; private set; } = true;
 
     static readonly HashSet<IntPtr> _busy = new();
     static readonly Dictionary<uint, bool> _pidExcluded = new();
@@ -46,9 +47,11 @@ public static class ColorMode
     static void Tick()
     {
         bool dark = ReadDark();
+        bool transparency = ReadTransparency();
         var (busy, occluders) = Scan();
-        bool changed = dark != Dark || !busy.SetEquals(_busy);
+        bool changed = dark != Dark || transparency != TransparencyEnabled || !busy.SetEquals(_busy);
         Dark = dark;
+        TransparencyEnabled = transparency;
         _busy.Clear();
         foreach (var m in busy) _busy.Add(m);
 
@@ -59,7 +62,7 @@ public static class ColorMode
                 ww.SetOccluded(occluders.Any(r => Covers(r, ww.PhysicalBounds)));
 
         if (!changed) return;
-        Program.Log($"colormode: dark={dark} busyMonitors={busy.Count}");
+        Program.Log($"colormode: dark={dark} transparency={transparency} busyMonitors={busy.Count}");
         foreach (Window w in Application.Current.Windows)
             (w as WidgetWindow)?.PushState();
         PanelWindow.Existing?.PushState();
@@ -75,6 +78,16 @@ public static class ColorMode
             return k?.GetValue("AppsUseLightTheme") is int v && v == 0;
         }
         catch { return Dark; }
+    }
+
+    static bool ReadTransparency()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return k?.GetValue("EnableTransparency") is int v ? v != 0 : true;
+        }
+        catch { return TransparencyEnabled; }
     }
 
     static readonly char[] _clsBuf = new char[64];

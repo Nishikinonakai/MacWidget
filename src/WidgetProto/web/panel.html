@@ -12,6 +12,8 @@
     --inset-bg: rgba(255,255,255,.08); --sel: rgba(255,255,255,.14); --sel-hover: rgba(255,255,255,.075);
     --hair: rgba(255,255,255,.09); --card: rgba(255,255,255,.055); --done-bg: #5A6A70;
   }
+  html.noeffects { --bg: #F2F0F4; --card: #fff; }
+  html.dark.noeffects { --bg: #28282D; --card: #35353A; }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { background:transparent; width:100%; height:100%; overflow:hidden;
     font-family:"Segoe UI Variable Display","Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif;
@@ -188,6 +190,7 @@
     const m = e.data || {};
     if (m.t === 'state') {
       document.documentElement.classList.toggle('dark', !!m.dark);
+      document.documentElement.classList.toggle('noeffects', !m.effects);
       if (typeof m.accent === 'string' && /^#[0-9a-f]{6}$/i.test(m.accent))
         document.documentElement.style.setProperty('--done-bg', m.accent);
       installed = new Set(m.installed || []);

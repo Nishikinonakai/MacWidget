@@ -73,11 +73,14 @@ public sealed class TrayPopupWindow : Window
         card.Children.Add(ActionRow("退出 MacWidget", "组件会从桌面隐藏", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), muted,
             primary: false, Program.RequestShutdown));
 
+        bool transparency = ColorMode.TransparencyEnabled;
         Content = new Border
         {
             Margin = new Thickness(Pad),
             Padding = new Thickness(8),
-            Background = new SolidColorBrush(dark ? Color.FromArgb(224, 42, 42, 46) : Color.FromArgb(226, 246, 246, 250)),
+            Background = new SolidColorBrush(transparency
+                ? (dark ? Color.FromArgb(224, 42, 42, 46) : Color.FromArgb(226, 246, 246, 250))
+                : (dark ? Color.FromRgb(42, 42, 46) : Color.FromRgb(246, 246, 250))),
             BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(31, 255, 255, 255) : Color.FromArgb(28, 0, 0, 0)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(15),
@@ -93,7 +96,7 @@ public sealed class TrayPopupWindow : Window
             Native.SetWindowLongPtr(src.Handle, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_TOOLWINDOW));
             Dwm.ExtendIntoClient(src.Handle);
             Dwm.SetDark(src.Handle, ColorMode.Dark);
-            Dwm.SetBackdrop(src.Handle, "mica");
+            Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? "mica" : "none");
         };
         Deactivated += (_, _) => SafeClose();
         KeyDown += (_, e) => { if (e.Key == Key.Escape) SafeClose(); };

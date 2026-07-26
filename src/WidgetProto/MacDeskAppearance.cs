@@ -28,7 +28,7 @@ internal static class MacDeskAppearance
 
     public static string PanelAccentCss()
     {
-        if (!IsInstalled()) return DefaultAccent;
+        if (Program.Opts.WithoutMacDesk || !IsInstalled()) return DefaultAccent;
 
         try
         {

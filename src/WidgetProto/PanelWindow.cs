@@ -42,7 +42,7 @@ public sealed class PanelWindow : Window
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
             Dwm.ExtendIntoClient(h);   // 透明表面防黑底
             Dwm.SetDark(h, ColorMode.Dark);
-            Dwm.SetBackdrop(h, "mica");
+            Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? "mica" : "none");
         };
         Loaded += OnLoaded;
         Closed += (_, _) => Existing = null;
@@ -123,13 +123,17 @@ public sealed class PanelWindow : Window
     public void PushState()
     {
         if (PresentationSource.FromVisual(this) is HwndSource src)
+        {
             Dwm.SetDark(src.Handle, ColorMode.Dark);
+            Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? "mica" : "none");
+        }
         var installed = Application.Current.Windows.OfType<WidgetWindow>()
             .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
         Post(System.Text.Json.JsonSerializer.Serialize(new
         {
             t = "state",
             dark = ColorMode.Dark,
+            effects = ColorMode.TransparencyEnabled,
             accent = MacDeskAppearance.PanelAccentCss(),
             installed,
         }));

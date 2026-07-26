@@ -13,6 +13,7 @@ public static class MacDeskCommands
 
     public static void Start()
     {
+        if (Program.Opts.WithoutMacDesk) return;
         if (_editWidgets != null) return;
         _editWidgets = new EventWaitHandle(false, EventResetMode.AutoReset, EditWidgetsEventName);
         var worker = new Thread(() =>
@@ -31,6 +32,7 @@ public static class MacDeskCommands
 
     public static bool RequestEditor()
     {
+        if (Program.Opts.WithoutMacDesk) return false;
         try
         {
             using var evt = EventWaitHandle.OpenExisting(EditWidgetsEventName);

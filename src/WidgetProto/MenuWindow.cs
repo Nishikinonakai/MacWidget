@@ -71,9 +71,12 @@ public sealed class MenuWindow : Window
         body.Children.Add(Row("移除小组件", new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), check: false,
             target.ByeAndClose));
 
+        bool transparency = ColorMode.TransparencyEnabled;
         Content = new Border
         {
-            Background = new SolidColorBrush(dark ? Color.FromArgb(224, 45, 45, 48) : Color.FromArgb(226, 242, 242, 247)),
+            Background = new SolidColorBrush(transparency
+                ? (dark ? Color.FromArgb(224, 45, 45, 48) : Color.FromArgb(226, 242, 242, 247))
+                : (dark ? Color.FromRgb(45, 45, 48) : Color.FromRgb(242, 242, 247))),
             BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(26, 0, 0, 0)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
@@ -92,7 +95,7 @@ public sealed class MenuWindow : Window
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_TOOLWINDOW));
             Dwm.ExtendIntoClient(h);   // 透明表面防黑底
             Dwm.SetDark(h, ColorMode.Dark);
-            Dwm.SetBackdrop(h, "acrylic"); // 短暂菜单用原生亚克力，比 Mica 更符合 Windows 语义
+            Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? "acrylic" : "none"); // 短暂菜单用原生亚克力
         };
         Loaded += (_, _) =>
         {

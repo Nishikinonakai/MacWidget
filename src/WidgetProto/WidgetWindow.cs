@@ -195,35 +195,35 @@ public sealed class WidgetWindow : Window
             ? File.ReadAllText(Path.Combine(Program.WebDir, "host.js"))
             : "";
         if (_hostJs.Length == 0) Program.Log("WARN host.js missing");
-        var (dark, mono) = StateNow();
+        var (dark, mono, effects) = StateNow();
         var cfgJson = Cfg is { } c ? c.GetRawText() : "null";
-        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")},cfg:{cfgJson}}};\n" + _hostJs;
+        return $"window.__mwInit={{dark:{(dark ? "true" : "false")},mono:{(mono ? "true" : "false")},effects:{(effects ? "true" : "false")},editing:{(EditMode.On ? "true" : "false")},cfg:{cfgJson}}};\n" + _hostJs;
     }
 
-    (bool dark, bool mono) StateNow()
+    (bool dark, bool mono, bool effects) StateNow()
     {
         var mon = PresentationSource.FromVisual(this) is HwndSource src
             ? Native.MonitorFromWindow(src.Handle, Native.MONITOR_DEFAULTTONEAREST)
             : IntPtr.Zero;
-        return (ColorMode.Dark, ColorMode.IsMono(mon));
+        return (ColorMode.Dark, ColorMode.IsMono(mon), ColorMode.TransparencyEnabled);
     }
 
-    (bool dark, bool mono, bool edit) _pushed;
+    (bool dark, bool mono, bool effects, bool edit) _pushed;
     bool _pushedOnce;
 
     public void PushState(bool forcePost = false)
     {
         if (_core == null || _suspended) return;
-        var (dark, mono) = StateNow();
+        var (dark, mono, effects) = StateNow();
         if (PresentationSource.FromVisual(this) is HwndSource src)
             Dwm.SetDark(src.Handle, dark);
-        var s = (dark, mono, EditMode.On);
+        var s = (dark, mono, effects, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
         _pushed = s; _pushedOnce = true;
         try
         {
             _core.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(
-                new { t = "state", dark, mono, editing = EditMode.On }));
+                new { t = "state", dark, mono, effects, editing = EditMode.On }));
         }
         catch (Exception ex) { Program.Log($"widget {_i} poststate FAIL: {ex.Message}"); }
     }

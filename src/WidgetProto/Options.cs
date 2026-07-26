@@ -11,6 +11,7 @@ public sealed class Options
     public string Glass = "extend";     // extend（透明表面防黑底，必须）| none
     public string Style = "auto";       // auto | full | mono —— Widget style 三档（macOS 语义）
     public string Appearance = "auto";  // auto | dark | light —— 仅测试覆盖，不写入 Windows 主题
+    public bool WithoutMacDesk;          // 运维/回归入口：模拟独立安装，不启用任一 MacDesk 联动通道
     public bool Dark = true;            // 实验模式初值；产品模式由 ColorMode 每 tick 读注册表接管
     public bool NoActivate = true;
     public bool ProcPerSite = true;     // 内存实验定案：--process-per-site 是胜负手，默认开
@@ -37,6 +38,7 @@ public sealed class Options
                 case "--glass": o.Glass = Next(); break;
                 case "--style": o.Style = Next(); break;
                 case "--appearance": o.Appearance = Next(); break;
+                case "--without-macdesk": o.WithoutMacDesk = true; break;
                 case "--light": o.Dark = false; break;
                 case "--activate": o.NoActivate = false; break;
                 case "--procpersite": o.ProcPerSite = true; break;

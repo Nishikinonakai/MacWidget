@@ -23,6 +23,7 @@ public static class WidgetLink
     /// <summary>UI 线程调用。默认 ~30Hz 节流；force 用于落定/关闭等必达时刻。</summary>
     public static void Send(bool force = false)
     {
+        if (Program.Opts.WithoutMacDesk) return;
         if (!force && (DateTime.Now - _lastSend).TotalMilliseconds < 33) return;
         _lastSend = DateTime.Now;
 
