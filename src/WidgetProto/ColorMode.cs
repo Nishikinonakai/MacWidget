@@ -67,6 +67,8 @@ public static class ColorMode
 
     static bool ReadDark()
     {
+        if (Program.Opts.Appearance == "dark") return true;
+        if (Program.Opts.Appearance == "light") return false;
         try
         {
             using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");

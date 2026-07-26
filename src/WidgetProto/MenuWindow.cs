@@ -73,7 +73,7 @@ public sealed class MenuWindow : Window
 
         Content = new Border
         {
-            Background = new SolidColorBrush(dark ? Color.FromArgb(249, 45, 45, 48) : Color.FromArgb(249, 242, 242, 247)),
+            Background = new SolidColorBrush(dark ? Color.FromArgb(224, 45, 45, 48) : Color.FromArgb(226, 242, 242, 247)),
             BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(26, 0, 0, 0)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
@@ -91,6 +91,8 @@ public sealed class MenuWindow : Window
             var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_TOOLWINDOW));
             Dwm.ExtendIntoClient(h);   // 透明表面防黑底
+            Dwm.SetDark(h, ColorMode.Dark);
+            Dwm.SetBackdrop(h, "acrylic"); // 短暂菜单用原生亚克力，比 Mica 更符合 Windows 语义
         };
         Loaded += (_, _) =>
         {

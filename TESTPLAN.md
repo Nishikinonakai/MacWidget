@@ -104,6 +104,29 @@ Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runti
 不会强制打断桌面。用户从托盘浮层选择“重新启动 MacWidget”后，复用显示拓扑交接的 `--restart-child` 路径。
 回归时使用上方的 `-ExerciseRestart` 触发同一路径并确认交接后的单实例、托盘和 MacDesk 联动都恢复正常。
 
+## 产品 UI 与多屏回归（临时开发副本）
+
+以下参数只覆盖当前进程，**不会修改 Windows 的亮暗主题或用户的组件风格**；应在临时发布目录中运行，
+测试结束后恢复正式安装版。三个组合都要截图，并检查 `macwidget.log` 中的 `backdrop mica(2) hr=0x0`：
+
+```powershell
+# 组件库：亮 / 暗，以及从 MacDesk settings.json 读取的完成按钮强调色
+& .\MacWidget.exe --appearance light --style full --edit-widgets
+& .\MacWidget.exe --appearance dark  --style full --edit-widgets
+
+# 所有已摆放组件都必须进入单色，包括天气渐变和照片内容
+& .\MacWidget.exe --appearance dark --style mono
+```
+
+接入第二个逻辑显示器后先运行只读观测器；它使用 `EnumDisplayMonitors` 并把调用线程设为 PMv2，
+不能用遗留 `Win32_DesktopMonitor` 的计数代替。相同 EDID 的双 HDMI 输入应报告两个 `DISPLAYn` 路径，
+MacWidget 启动日志应使用 `EDID@DISPLAYn` 作为稳定布局键。随后至少验证：两个显示器各有一枚组件、
+将鼠标移到副屏后打开的组件库落在副屏、以及热插拔/显示模式变化后的单实例交接。
+
+```powershell
+& .\tools\observe-display-topology.ps1 | Format-List
+```
+
 ## 结果记录模板
 
 ```

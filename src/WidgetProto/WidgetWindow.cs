@@ -90,7 +90,7 @@ public sealed class WidgetWindow : Window
 
         // 透明表面防黑底必须 extend（macwidget 已踩）；圆角不再走 DWM（系统 8px 与卡 20pt 不符，CSS 接管）
         if (Program.Opts.Glass == "extend") Dwm.ExtendIntoClient(h);
-        Dwm.SetDark(h, Program.Opts.Dark);
+        Dwm.SetDark(h, Program.Opts.Appearance == "light" ? false : Program.Opts.Dark);
         if (Program.Opts.Backdrop != "none") Dwm.SetBackdrop(h, Program.Opts.Backdrop);   // 实验对照保留
 
         if (Program.Opts.Pin == "bottom") BottomPin.Install(src);
@@ -215,6 +215,8 @@ public sealed class WidgetWindow : Window
     {
         if (_core == null || _suspended) return;
         var (dark, mono) = StateNow();
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+            Dwm.SetDark(src.Handle, dark);
         var s = (dark, mono, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
         _pushed = s; _pushedOnce = true;

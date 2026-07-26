@@ -41,6 +41,8 @@ public sealed class PanelWindow : Window
             ex |= Native.WS_EX_TOOLWINDOW;
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
             Dwm.ExtendIntoClient(h);   // 透明表面防黑底
+            Dwm.SetDark(h, ColorMode.Dark);
+            Dwm.SetBackdrop(h, "mica");
         };
         Loaded += OnLoaded;
         Closed += (_, _) => Existing = null;
@@ -120,12 +122,15 @@ public sealed class PanelWindow : Window
 
     public void PushState()
     {
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+            Dwm.SetDark(src.Handle, ColorMode.Dark);
         var installed = Application.Current.Windows.OfType<WidgetWindow>()
             .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
         Post(System.Text.Json.JsonSerializer.Serialize(new
         {
             t = "state",
             dark = ColorMode.Dark,
+            accent = MacDeskAppearance.PanelAccentCss(),
             installed,
         }));
     }

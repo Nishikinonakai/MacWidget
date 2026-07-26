@@ -73,6 +73,7 @@ public static class Layout
                 var list = new List<Entry>();
                 foreach (var screen in DisplayTopology.GetAll())
                 {
+                    changed |= MigrateAmbiguousDuplicateBucket(doc, screen);
                     changed |= MigrateLegacyPrimaryBucket(doc, screen);
                     if (doc.TryGetValue(screen.LayoutKey, out var bucket)) list.AddRange(bucket);
                 }
@@ -173,6 +174,32 @@ public static class Layout
             WriteIndented = true,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         }));
+    }
+
+    /// <summary>
+    /// v2.0 以前，相同 EDID 的多路连接以 `SKG5500` / `SKG5500#2` 区分，后缀来自枚举顺序。
+    /// 新 key 用 `@DISPLAYn` 锁定 Windows 的连接路径。迁移时复制而不移除旧桶：断开第二屏回到
+    /// 单屏后，旧版本和当前版本仍都能找回原来的摆放。
+    /// </summary>
+    static bool MigrateAmbiguousDuplicateBucket(Dictionary<string, List<Entry>> doc, DisplayTopology.Display display)
+    {
+        int marker = display.Key.LastIndexOf("@DISPLAY", StringComparison.OrdinalIgnoreCase);
+        if (marker <= 0 || doc.ContainsKey(display.LayoutKey)) return false;
+
+        string baseKey = display.Key[..marker];
+        string device = display.Key[(marker + 1)..]; // DISPLAY1 / DISPLAY2
+        int ordinal = 1;
+        if (device.Length > "DISPLAY".Length)
+            _ = int.TryParse(device["DISPLAY".Length..], out ordinal);
+        if (ordinal < 1) ordinal = 1;
+
+        string oldKey = ordinal == 1 ? baseKey : $"{baseKey}#{ordinal}";
+        string oldLayoutKey = $"v2:{oldKey}:{display.Physical.Width:F0}x{display.Physical.Height:F0}";
+        if (!doc.TryGetValue(oldLayoutKey, out var oldBucket)) return false;
+
+        doc[display.LayoutKey] = oldBucket.Select(entry => entry with { Display = display.Key }).ToList();
+        Program.Log($"layout migrated: duplicate {oldLayoutKey} -> {display.LayoutKey}");
+        return true;
     }
 
     static bool MigrateLegacyPrimaryBucket(Dictionary<string, List<Entry>> doc, DisplayTopology.Display display)

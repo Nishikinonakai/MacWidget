@@ -71,15 +71,21 @@ public static class DisplayTopology
             return true;
         }, IntPtr.Zero);
 
-        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // 同一台电视的多个 HDMI 输入会给 Windows 相同 EDID。旧代码按枚举顺序追加 #2，
+        // 而热插拔后的枚举顺序没有稳定性，可能把两路输入的组件布局对调。DISPLAYn 是
+        // Windows 当前图形路径的稳定连接标识；只在 EDID 重复时纳入 key，单屏旧 key 不变。
+        var baseKeys = raw.Select(item => EdidKey(item.Info.szDevice) ?? DeviceKey(item.Info.szDevice)).ToList();
+        var duplicateCounts = baseKeys
+            .GroupBy(key => key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var displays = new List<Display>();
-        foreach (var (handle, info) in raw)
+        for (int i = 0; i < raw.Count; i++)
         {
+            var (handle, info) = raw[i];
             uint dpi = 96;
             if (GetDpiForMonitor(handle, 0 /* MDT_EFFECTIVE_DPI */, out uint x, out _) == 0) dpi = x;
-            string key = EdidKey(info.szDevice) ?? info.szDevice.TrimStart('\\', '.');
-            if (seen.TryGetValue(key, out int n)) { seen[key] = n + 1; key = $"{key}#{n + 1}"; }
-            else seen[key] = 1;
+            string baseKey = baseKeys[i];
+            string key = duplicateCounts[baseKey] > 1 ? $"{baseKey}@{DeviceKey(info.szDevice)}" : baseKey;
             displays.Add(new Display(key, handle,
                 ToRect(info.rcMonitor), ToRect(info.rcWork), dpi, (info.dwFlags & 1) != 0, info.szDevice));
         }
@@ -131,5 +137,11 @@ public static class DisplayTopology
             fallback ??= key;
         }
         return fallback;
+    }
+
+    static string DeviceKey(string device)
+    {
+        var key = device.Trim().TrimStart('\\', '.');
+        return string.IsNullOrEmpty(key) ? "DISPLAY" : key;
     }
 }

@@ -77,7 +77,7 @@ public sealed class TrayPopupWindow : Window
         {
             Margin = new Thickness(Pad),
             Padding = new Thickness(8),
-            Background = new SolidColorBrush(dark ? Color.FromArgb(250, 42, 42, 46) : Color.FromArgb(250, 246, 246, 250)),
+            Background = new SolidColorBrush(dark ? Color.FromArgb(224, 42, 42, 46) : Color.FromArgb(226, 246, 246, 250)),
             BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(31, 255, 255, 255) : Color.FromArgb(28, 0, 0, 0)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(15),
@@ -92,6 +92,8 @@ public sealed class TrayPopupWindow : Window
             var ex = Native.GetWindowLongPtr(src.Handle, Native.GWL_EXSTYLE).ToInt64();
             Native.SetWindowLongPtr(src.Handle, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_TOOLWINDOW));
             Dwm.ExtendIntoClient(src.Handle);
+            Dwm.SetDark(src.Handle, ColorMode.Dark);
+            Dwm.SetBackdrop(src.Handle, "mica");
         };
         Deactivated += (_, _) => SafeClose();
         KeyDown += (_, e) => { if (e.Key == Key.Escape) SafeClose(); };

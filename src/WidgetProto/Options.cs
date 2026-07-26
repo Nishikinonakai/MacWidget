@@ -10,6 +10,7 @@ public sealed class Options
     public string Widget = "mixed";     // 实验模式的组件种类
     public string Glass = "extend";     // extend（透明表面防黑底，必须）| none
     public string Style = "auto";       // auto | full | mono —— Widget style 三档（macOS 语义）
+    public string Appearance = "auto";  // auto | dark | light —— 仅测试覆盖，不写入 Windows 主题
     public bool Dark = true;            // 实验模式初值；产品模式由 ColorMode 每 tick 读注册表接管
     public bool NoActivate = true;
     public bool ProcPerSite = true;     // 内存实验定案：--process-per-site 是胜负手，默认开
@@ -35,6 +36,7 @@ public sealed class Options
                 case "--widget": o.Widget = Next(); o.LabMode = true; break;
                 case "--glass": o.Glass = Next(); break;
                 case "--style": o.Style = Next(); break;
+                case "--appearance": o.Appearance = Next(); break;
                 case "--light": o.Dark = false; break;
                 case "--activate": o.NoActivate = false; break;
                 case "--procpersite": o.ProcPerSite = true; break;
@@ -47,6 +49,7 @@ public sealed class Options
         }
         if (o.N < 1) o.N = 1;
         if (o.Style is not ("auto" or "full" or "mono")) o.Style = "auto";
+        if (o.Appearance is not ("auto" or "dark" or "light")) o.Appearance = "auto";
         return o;
     }
 }
