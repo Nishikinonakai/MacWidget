@@ -18,6 +18,8 @@
     '时钟':'Clock','时间与世界时钟':'Time and world clocks','日历':'Calendar','日期与月历':'Date and month view','系统监视':'System Monitor','CPU、内存与磁盘':'CPU, memory, and disk',
     '电池':'Battery','电量与充电状态':'Battery and charging','正在播放':'Now Playing','媒体播放控制':'Media controls','天气':'Weather','当前天气与预报':'Current conditions and forecast','照片':'Photos','文件夹照片轮播':'Photo-folder slideshow',
     '搜索结果：':'Search results: ','个组件':' widgets','加载中':'Loading','天气地点':'Weather location','输入城市或地区':'Enter a city or region','搜索':'Search','搜索：Open-Meteo · 天气：MET Norway':'Search: Open-Meteo · Weather: MET Norway',
+    '星期日':'Sunday','星期一':'Monday','星期二':'Tuesday','星期三':'Wednesday','星期四':'Thursday','星期五':'Friday','星期六':'Saturday',
+    '杭州':'Hangzhou','东京':'Tokyo','伦敦':'London','纽约':'New York',
     '暂时无法获取天气':'Weather is temporarily unavailable','请输入至少两个字符':'Enter at least two characters','正在搜索…':'Searching…','搜索服务暂不可用':'Search is unavailable','未找到地点':'No locations found',
     '右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder','文件夹':'Folder','（图片）':'(Pictures)','选择…':'Choose…','轮换间隔':'Rotation interval','秒':' sec',
     '没有播放内容':'Nothing playing','未知曲目':'Unknown track','内存':'Memory','磁盘':'Disk','无电池':'No battery','充电中':'Charging','已充满':'Fully charged','剩余 ':'Remaining '
