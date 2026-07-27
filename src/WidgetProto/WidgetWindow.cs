@@ -17,9 +17,13 @@ public sealed class WidgetWindow : Window
     readonly bool _startLifted;
     readonly DisplayTopology.Position? _initialPosition;
     CoreWebView2? _core;
+    UIElement? _webViewControl;
     bool _removing;
     bool _occluded;
     bool _dataSuspended;
+    bool _configurationMode;
+    bool _allowActivation;
+    long _lastBackdropPost;
 
     public string Kind { get; }
     public string SizeClass { get; private set; }
@@ -49,11 +53,9 @@ public sealed class WidgetWindow : Window
         Background = Brushes.Transparent;
         Title = $"MacWidget {i} {kind}";
 
-        // The old HWND included the CSS shadow gutter.  A non-layered DWM
-        // backdrop paints that gutter, which is the white/gray rectangle seen
-        // around every card.  Make the native surface the card itself; grid
-        // positions keep the 16-DIP spacing between neighbouring widgets.
-        (Width, Height) = CardSize(kind, SizeClass);
+        // Keep the card's 8-DIP design gutter in the HWND. It hosts the edit
+        // badge above the card and is clipped by the widget-shaped native region.
+        (Width, Height) = WidgetRegistry.Size(kind, SizeClass);
 
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = 0; Top = 0; // hWnd 建好后统一走物理像素定位，混合 DPI 不能用 Left/Top 跨屏。
@@ -95,25 +97,28 @@ public sealed class WidgetWindow : Window
         // 透明表面防黑底必须 extend（macwidget 已踩）；圆角不再走 DWM（系统 8px 与卡 20pt 不符，CSS 接管）
         if (Program.Opts.Glass == "extend") Dwm.ExtendIntoClient(h);
         Dwm.SetDark(h, Program.Opts.Appearance == "light" ? false : Program.Opts.Dark);
-        // One owner for the outline: the Win32 region matches widget.css's
-        // inset/radius exactly.  DWM's independent 8px corner caused a second
-        // white/gray outline around the 20px web card.
+        // The WebView owns all visible pixels. Its preblurred wallpaper material
+        // is clipped by the same card region without extending into the badge.
         Dwm.SetSquareCorners(h);
-        Native.ApplyRoundedRegion(h, CardRadius);
-        if (Program.Opts.Backdrop != "none") Dwm.SetBackdrop(h, Program.Opts.Backdrop);   // 实验对照保留
-
+        Native.ApplyWidgetRegion(h, CardInset, CardRadius, EditMode.On);
+        Native.ApplyAfterFirstLayout(this,
+            hwnd => Native.ApplyWidgetRegion(hwnd, CardInset, CardRadius, EditMode.On));
         if (Program.Opts.Pin == "bottom") BottomPin.Install(src);
         if (_startLifted) BottomPin.Lift(h);
         if (Program.Opts.NoActivate) src.AddHook(NoActivateHook);
-        SizeChanged += (_, _) => Native.ApplyRoundedRegion(h, CardRadius);
+        SizeChanged += (_, _) => Native.ApplyWidgetRegion(h, CardInset, CardRadius, EditMode.On);
         if (_initialPosition is { } pos) MoveToPhysical(RectFor(pos));
     }
 
-    static IntPtr NoActivateHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    IntPtr NoActivateHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_MOUSEACTIVATE = 0x0021;
         const int MA_NOACTIVATE = 3;
-        if (msg == WM_MOUSEACTIVATE) { handled = true; return new IntPtr(MA_NOACTIVATE); }
+        if (msg == WM_MOUSEACTIVATE && !_allowActivation)
+        {
+            handled = true;
+            return new IntPtr(MA_NOACTIVATE);
+        }
         return IntPtr.Zero;
     }
 
@@ -134,6 +139,7 @@ public sealed class WidgetWindow : Window
             if (Program.Opts.Control == "comp")
             {
                 var wv = new WebView2CompositionControl { DefaultBackgroundColor = System.Drawing.Color.Transparent };
+                _webViewControl = wv;
                 Content = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
@@ -142,6 +148,7 @@ public sealed class WidgetWindow : Window
             else
             {
                 var wv = new Microsoft.Web.WebView2.Wpf.WebView2 { DefaultBackgroundColor = System.Drawing.Color.Transparent };
+                _webViewControl = wv;
                 Content = wv;
                 await wv.EnsureCoreWebView2Async(Program.Env);
                 await Setup(wv.CoreWebView2, host);
@@ -160,6 +167,8 @@ public sealed class WidgetWindow : Window
         // photo 的源整个由宿主供流（Hook 里说明为什么不能用映射）；其余 kind 走文件夹映射
         if (Kind != "photo")
             core.SetVirtualHostNameToFolderMapping(host, Program.WebDir, CoreWebView2HostResourceAccessKind.Allow);
+        core.SetVirtualHostNameToFolderMapping(
+            "material.test", Program.DataDir, CoreWebView2HostResourceAccessKind.Allow);
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
@@ -171,6 +180,7 @@ public sealed class WidgetWindow : Window
         {
             Program.Log($"widget {_i} ({Kind}) nav done ok={a.IsSuccess}");
             PushState(forcePost: true);   // 注入快照与导航之间的状态变化在这兜住
+            PushBackdropAlignment(force: true);
             if (Kind == "photo") PhotoSupport.Apply(this, core, _i);
         };
         core.WebMessageReceived += OnWebMessage;
@@ -223,21 +233,14 @@ public sealed class WidgetWindow : Window
     {
         if (_core == null) return;
         var (dark, mono, effects) = StateNow();
-        if (PresentationSource.FromVisual(this) is HwndSource src)
-        {
-            Dwm.SetDark(src.Handle, dark);
-            // In mono the native Acrylic surface supplies the sampled material;
-            // widget.css deliberately leaves the card translucent so it is
-            // visible instead of being hidden behind an opaque color fill.
-            // Acrylic exposes wallpaper colour more clearly than Mica's heavily
-            // tinted base layer. Reapply the exact card region afterwards:
-            // changing the system backdrop can reset the compositor clip.
-            Dwm.SetBackdrop(src.Handle, effects && mono ? "wca" : Program.Opts.Backdrop);
-            Native.ApplyRoundedRegion(src.Handle, CardRadius);
-        }
         var s = (dark, mono, effects, EditMode.On);
         if (!forcePost && _pushedOnce && s == _pushed) return;
         _pushed = s; _pushedOnce = true;
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+        {
+            Dwm.SetDark(src.Handle, dark);
+            Native.ApplyWidgetRegion(src.Handle, CardInset, CardRadius, EditMode.On);
+        }
         try
         {
             _core.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(
@@ -246,11 +249,74 @@ public sealed class WidgetWindow : Window
         catch (Exception ex) { Program.Log($"widget {_i} poststate FAIL: {ex.Message}"); }
     }
 
+    void PushBackdropAlignment(bool force = false, Rect? knownBounds = null)
+    {
+        if (_core == null) return;
+        long now = Environment.TickCount64;
+        if (!force && now - _lastBackdropPost < 32) return;
+        var alignment = WallpaperBackdrop.ForWidget(knownBounds ?? PhysicalBounds, CardInset);
+        if (alignment == null) return;
+        _lastBackdropPost = now;
+        try
+        {
+            _core.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                t = "backdrop",
+                url = alignment.Url,
+                width = alignment.Width,
+                height = alignment.Height,
+                x = alignment.X,
+                y = alignment.Y,
+            }));
+        }
+        catch (Exception ex) { Program.Log($"widget {_i} backdrop post FAIL: {ex.Message}"); }
+    }
+
     /// <summary>数据桥投递（DataHub 调）；core 未就绪静默丢——订阅回放兜住后续。</summary>
     public void PostJson(string json)
     {
         try { _core?.PostWebMessageAsJson(json); }
         catch (Exception ex) { Program.Log($"widget {_i} postjson FAIL: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Desktop widgets normally never activate. A configuration face containing
+    /// text fields is the deliberate exception: temporarily lift and activate
+    /// this HWND, then restore desktop/no-activate semantics on completion.
+    /// </summary>
+    public void BeginConfiguration()
+    {
+        if (_core == null || _configurationMode) return;
+        _configurationMode = true;
+        _allowActivation = true;
+        var hwnd = NativeHandle;
+        if (Program.Opts.NoActivate)
+        {
+            long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex & ~Native.WS_EX_NOACTIVATE));
+        }
+        if (Program.Opts.Pin == "bottom") BottomPin.Lift(hwnd);
+        Activate();
+        PostJson("""{"t":"editcfg"}""");
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            Activate();
+            _webViewControl?.Focus();
+        }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    void EndConfiguration()
+    {
+        if (!_configurationMode) return;
+        _configurationMode = false;
+        _allowActivation = false;
+        var hwnd = NativeHandle;
+        if (Program.Opts.NoActivate)
+        {
+            long ex = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(ex | Native.WS_EX_NOACTIVATE));
+        }
+        if (Program.Opts.Pin == "bottom" && !_dragging) BottomPin.Drop(hwnd);
     }
 
     /// <summary>
@@ -275,7 +341,7 @@ public sealed class WidgetWindow : Window
     {
         if (size == SizeClass || !WidgetRegistry.SizesOf(Kind).Contains(size)) return;
         SizeClass = size;
-        (Width, Height) = CardSize(Kind, size);
+        (Width, Height) = WidgetRegistry.Size(Kind, size);
         Program.Log($"widget {_i} ({Kind}) size -> {size}");
         // WPF 会在本轮布局后才把 DIU 尺寸落实到当前屏的物理尺寸。
         _ = Dispatcher.BeginInvoke(() =>
@@ -349,6 +415,9 @@ public sealed class WidgetWindow : Window
                     if (Kind == "photo" && _core != null) PhotoSupport.Apply(this, _core, _i);
                     _ = RefreshInitScript();   // 注入快照跟上新 cfg（否则下次导航读到陈旧 cfg——真机踩过）
                     break;
+                case "cfgdone":
+                    EndConfiguration();
+                    break;
                 case "placeSearch":
                     if (Kind != "weather") break;
                     var query = root.TryGetProperty("q", out var q) ? q.GetString() ?? "" : "";
@@ -374,7 +443,7 @@ public sealed class WidgetWindow : Window
                     _dragging = true;
                     _origBounds = PhysicalBounds;
                     _dragScale = DpiScale();
-                    BottomPin.Lift(Hwnd());          // macOS 同款：拖拽中的组件升层
+                    BottomPin.Lift(Hwnd());
                     Program.Log($"widget {_i} dragstart at ({_origBounds.Left:f0},{_origBounds.Top:f0})px");
                     break;
                 case "drag":
@@ -422,7 +491,7 @@ public sealed class WidgetWindow : Window
     {
         try
         {
-            var results = await WeatherSearch.FindAsync(query);
+            var results = await WeatherSearch.FindAsync(query, ProductSettings.English ? "en" : "zh");
             PostJson(System.Text.Json.JsonSerializer.Serialize(new { t = "placeResults", q = query, results }));
         }
         catch (Exception ex)
@@ -433,12 +502,7 @@ public sealed class WidgetWindow : Window
     }
 
     IntPtr Hwnd() => ((HwndSource)PresentationSource.FromVisual(this)!).Handle;
-
-    static (double Width, double Height) CardSize(string kind, string size)
-    {
-        var (width, height) = WidgetRegistry.Size(kind, size);
-        return (width - CardInset * 2, height - CardInset * 2);
-    }
+    internal IntPtr NativeHandle => Hwnd();
 
     /// <summary>当前帧的真实虚拟桌面物理矩形；这是避让、跨屏摆位与持久化的共同坐标系。</summary>
     public Rect PhysicalBounds => PresentationSource.FromVisual(this) is HwndSource src
@@ -458,6 +522,11 @@ public sealed class WidgetWindow : Window
     public Rect RectAt(double left, double top)
     {
         var current = PhysicalBounds;
+        return RectAt(left, top, current);
+    }
+
+    internal Rect RectAt(double left, double top, Rect current)
+    {
         var probe = new Rect(left, top,
             current.IsEmpty ? Width * DpiScale() : current.Width,
             current.IsEmpty ? Height * DpiScale() : current.Height);
@@ -483,8 +552,9 @@ public sealed class WidgetWindow : Window
     public void MoveToPhysical(Rect rect)
     {
         var src = (HwndSource)PresentationSource.FromVisual(this)!;
-        Native.MoveWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
-            (int)Math.Round(rect.Width), (int)Math.Round(rect.Height), true);
+        Native.MoveCompositedWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
+            (int)Math.Round(rect.Width), (int)Math.Round(rect.Height));
+        PushBackdropAlignment(knownBounds: rect);
     }
 
     /// <summary>面板拖出松手后的落位（PanelWindow 的光标循环调用）。</summary>

@@ -55,8 +55,8 @@ public sealed class GhostWindow : Window
         Left = 0; Top = 0;
         if (!IsVisible) Show();
         if (PresentationSource.FromVisual(this) is HwndSource src)
-            Native.MoveWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
-                (int)Math.Round(rect.Width), (int)Math.Round(rect.Height), true);
+            Native.MoveCompositedWindow(src.Handle, (int)Math.Round(rect.Left), (int)Math.Round(rect.Top),
+                (int)Math.Round(rect.Width), (int)Math.Round(rect.Height));
     }
 
     public void HideGhost() { if (IsVisible) Hide(); }

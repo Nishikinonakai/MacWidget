@@ -14,8 +14,8 @@
   html.nosession .live { display:none !important; }
 
   /* ---- Small ---- */
-  .s-art { position:absolute; inset:0; }
-  .s-art img { width:100%; height:100%; object-fit:cover; display:block; }
+  .s-art { position:absolute; inset:0; overflow:hidden; }
+  .s-art img { width:100%; height:100%; object-fit:cover; display:block; position:relative; }
   .s-shade { position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.62) 0%, rgba(0,0,0,0) 46%); }
   .s-meta { position:absolute; left:12px; right:12px; bottom:10px; color:#fff; }
   .s-meta .t { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -37,7 +37,7 @@
     .m-art { flex:0 0 116px; width:116px; height:116px; border-radius:10px; overflow:hidden; position:relative;
              background:linear-gradient(135deg, #FA586A 0%, #B33BF6 100%);
              box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-    .m-art img { width:100%; height:100%; object-fit:cover; display:block; }
+    .m-art img { width:100%; height:100%; object-fit:cover; display:block; position:relative; }
     .m-art.noart img { display:none; }
     .m-art.noart::after { content:"♪"; position:absolute; inset:0; display:flex; align-items:center;
                           justify-content:center; font-size:44px; color:rgba(255,255,255,.85); }
@@ -53,6 +53,28 @@
     .btn:hover { background:var(--hairline); }
     .btn:active { transform:scale(.9); }
     .btn svg { fill:var(--fg); }
+  }
+  /* Keep album artwork consistent with the Photos widget in mono mode:
+     wallpaper material remains visible through a softly blurred colour layer,
+     with the artwork luminance restored as a translucent grayscale layer. */
+  .s-art::before, .m-art::before {
+    content:""; position:absolute; inset:-8%;
+    background-image:var(--album-art,none);
+    background-size:cover; background-position:center;
+    opacity:0; pointer-events:none;
+  }
+  html.mono .s-art:not(.noart), html.mono .m-art:not(.noart) {
+    background:rgba(255,255,255,.10);
+  }
+  html.mono .s-art:not(.noart)::before, html.mono .m-art:not(.noart)::before {
+    opacity:.58; filter:blur(26px) saturate(.92) brightness(.92);
+  }
+  html.mono .s-art:not(.noart) img, html.mono .m-art:not(.noart) img {
+    opacity:.46; filter:grayscale(1) contrast(.84) brightness(1.28);
+    mix-blend-mode:screen;
+  }
+  html.dark.mono .s-art:not(.noart) img, html.dark.mono .m-art:not(.noart) img {
+    opacity:.42; mix-blend-mode:luminosity;
   }
   html.stale .live { opacity:.55; transition:opacity .3s ease; }
 </style></head><body>
@@ -106,8 +128,15 @@
   });
 
   function setArt(img, box, art) {
-    if (art) { img.src = art; box.classList.remove('noart'); }
-    else { img.removeAttribute('src'); box.classList.add('noart'); }
+    if (art) {
+      img.src = art;
+      box.style.setProperty('--album-art', `url(${JSON.stringify(art)})`);
+      box.classList.remove('noart');
+    } else {
+      img.removeAttribute('src');
+      box.style.removeProperty('--album-art');
+      box.classList.add('noart');
+    }
   }
   window.mw?.subscribe('music', m => {
     if (m.status === 'loading') return;

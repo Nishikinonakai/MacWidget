@@ -13,6 +13,9 @@
   --tint: #FF9F0A;              /* 组件自定品牌色；mono 态被统一刷白 */
   --hairline: rgba(0,0,0,.06);
   --shadow: 0 2px 8px rgba(0,0,0,.28);
+  --backdrop-image: none;
+  --backdrop-size: auto;
+  --backdrop-position: 0 0;
 }
 html.dark {
   --card-bg: #2E2E2E;
@@ -25,6 +28,14 @@ html.mono {
   --fg2: rgba(255,255,255,.62);
   --tint: #ffffff;              /* 彩色文字/曲线 → 白（实测语义） */
   --hairline: rgba(255,255,255,.12);
+}
+/* Configuration faces are controls, not tinted desktop content. In light
+   mono mode the shared white foreground otherwise lands on a white back face. */
+html.mono.cfgmode:not(.dark) {
+  --card-bg: #ffffff;
+  --fg: #1d1d1f;
+  --fg2: #6e6e73;
+  --hairline: rgba(0,0,0,.065);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -52,16 +63,16 @@ html, body {
   opacity: 1; transition: opacity .3s ease;
 }
 html.mono .card {
-  background: rgba(70,68,76,.18);
-  /* The native Acrylic surface below this transparent card supplies the sampled
-     desktop.  The local blur avoids a flat, gray overlay when the wallpaper
-     changes beneath a widget. */
-  -webkit-backdrop-filter: blur(26px) saturate(.92);
-  backdrop-filter: blur(26px) saturate(.92);
+  /* Widgets are desktop-bottom surfaces: their true backdrop is the wallpaper,
+     blurred once per monitor and aligned to this card's physical position. */
+  background-color: rgba(70,68,76,.34);
+  background-image:
+    linear-gradient(rgba(70,68,76,.24), rgba(70,68,76,.24)),
+    var(--backdrop-image);
+  background-size: auto, var(--backdrop-size);
+  background-position: 0 0, var(--backdrop-position);
+  background-repeat: no-repeat;
 }
-/* Installed desktop widgets use a card-sized HWND. Gallery previews keep the
-   8px design gutter because they are rendered inside a larger preview tile. */
-html.mw-hosted .card { inset: 0; }
 html.mono .card::before { opacity: 0; }
 html.noeffects.mono .card { background: #5f5d63; -webkit-backdrop-filter:none; backdrop-filter:none; }
 
@@ -72,19 +83,20 @@ html.noeffects.mono .card { background: #5f5d63; -webkit-backdrop-filter:none; b
   transition: filter .3s ease;
 }
 html.mono .content { filter: saturate(0) brightness(1.15); }
+html.mono.cfgmode .content { filter: none; }
 
 /* 移除动画（宿主发 bye 后收窗） */
 html.bye .card { transform: scale(.05); opacity: 0; }
 
 /* 编辑态减号徽章（host.js 注入）：浅磨砂圆 ~20pt 压帧角 */
 .mw-badge {
-  position: absolute; left: 1px; top: 1px; width: 22px; height: 22px;
+  position: absolute; left: 3px; top: 3px; width: 22px; height: 22px;
   border-radius: 50%;
   background: rgba(235,235,240,.94);
-  box-shadow: 0 1px 4px rgba(0,0,0,.35), inset 0 0 0 .5px rgba(0,0,0,.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,.35), inset 0 0 0 .5px rgba(0,0,0,.06);
   opacity: 0; transform: scale(.4); pointer-events: none;
   transition: opacity .18s ease, transform .18s cubic-bezier(.2,.8,.3,1.2);
-  z-index: 9;
+  z-index: 10; /* Chromium owns the complete antialiased circle and shadow */
 }
 .mw-badge::before {
   content: ""; position: absolute; left: 5px; top: 10px; width: 12px; height: 2.4px;

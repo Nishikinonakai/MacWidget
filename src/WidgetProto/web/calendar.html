@@ -32,15 +32,17 @@
 </div></div>
 <script>
   const n = new Date();
-  document.getElementById('dow').textContent =
-    ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][n.getDay()];
+  const en = window.mw?.lang?.() === 'en' || new URLSearchParams(location.search).get('lang') === 'en';
+  document.getElementById('dow').textContent = new Intl.DateTimeFormat(
+    en ? 'en-US' : 'zh-CN', { weekday:'long' }).format(n);
   document.getElementById('day').textContent = n.getDate();
 
-  // 月历（周一起始，中文习惯；跨月格留空）
+  // 月历周一起始；窄星期名由显式语言包给出，预览 iframe 也能独立本地化。
   const y = n.getFullYear(), m = n.getMonth();
   const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
   const lead = (first.getDay() + 6) % 7;   // 周一=0
-  let html = ['一','二','三','四','五','六','日'].map(d => `<span class="hd">${d}</span>`).join('');
+  const weekdays = en ? ['M','T','W','T','F','S','S'] : ['一','二','三','四','五','六','日'];
+  let html = weekdays.map(d => `<span class="hd">${d}</span>`).join('');
   for (let i = 0; i < lead; i++) html += '<span class="d out"></span>';
   for (let d = 1; d <= days; d++)
     html += `<span class="d${d === n.getDate() ? ' today' : ''}">${d}</span>`;

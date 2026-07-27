@@ -24,11 +24,15 @@
     '右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder','文件夹':'Folder','（图片）':'(Pictures)','选择…':'Choose…','轮换间隔':'Rotation interval','秒':' sec',
     '没有播放内容':'Nothing playing','未知曲目':'Unknown track','内存':'Memory','磁盘':'Disk','无电池':'No battery','充电中':'Charging','已充满':'Fully charged','剩余 ':'Remaining '
   };
+  const enPairs = Object.entries(enText).sort((a, b) => b[0].length - a[0].length);
   function localize(root) {
     if (!english || !root) return;
-    const translate = s => Object.entries(enText).reduce((v, [zh, en]) => v.split(zh).join(en), s);
+    const translate = s => enPairs.reduce((v, [zh, en]) => v.split(zh).join(en), s);
     const walk = node => {
-      if (node.nodeType === Node.TEXT_NODE) node.nodeValue = translate(node.nodeValue);
+      if (node.nodeType === Node.TEXT_NODE) {
+        const next = translate(node.nodeValue);
+        if (next !== node.nodeValue) node.nodeValue = next;
+      }
       else if (node.nodeType === Node.ELEMENT_NODE) {
         for (const a of ['placeholder', 'aria-label', 'title']) if (node.hasAttribute(a)) node.setAttribute(a, translate(node.getAttribute(a)));
         node.childNodes.forEach(walk);
@@ -59,7 +63,10 @@
     lang() { return (window.__mwInit && window.__mwInit.lang) || 'zh'; },
     saveCfg(c) { cfg = c; post({ t: 'cfg', cfg: c }); },
     pickFolder(fn) { pickQ.push(fn); post({ t: 'pickfolder' }); },   // 原生选文件夹，fn(path|null)
-    exitCfg() { try { document.documentElement.classList.remove('cfgmode'); } catch { } },
+    exitCfg() {
+      try { document.documentElement.classList.remove('cfgmode'); } catch { }
+      post({ t: 'cfgdone' });
+    },
     on(type, fn) { (evs[type] || (evs[type] = [])).push(fn); },      // 宿主专发消息（如照片清单）
     log(m) { post({ t: 'dbg', m: String(m) }); },                    // 排障：写进宿主 proto.log
   };
@@ -69,6 +76,7 @@
     const H = document.documentElement;
     if (!H) { pending = Object.assign(pending || {}, s); return; }
     H.classList.add('mw-hosted');
+    H.lang = english ? 'en' : 'zh-CN';
     if ('dark' in s) H.classList.toggle('dark', !!s.dark);
     if ('mono' in s) H.classList.toggle('mono', !!s.mono);
     if ('effects' in s) H.classList.toggle('noeffects', !s.effects);
@@ -81,9 +89,22 @@
     window.chrome?.webview?.addEventListener('message', e => {
       const m = e.data || {};
       if (m.t === 'state') apply(m);
+      else if (m.t === 'backdrop') {
+        const H = document.documentElement;
+        if (H) {
+          H.style.setProperty('--backdrop-image', `url("${m.url}")`);
+          H.style.setProperty('--backdrop-size', `${m.width}px ${m.height}px`);
+          H.style.setProperty('--backdrop-position', `${m.x}px ${m.y}px`);
+        }
+      }
       else if (m.t === 'bye') apply({ bye: 1 });
       else if (m.t === 'data') (subs[m.topic] || []).forEach(fn => { try { fn(m); } catch { } });
-      else if (m.t === 'editcfg') { try { document.documentElement.classList.add('cfgmode'); } catch { } }
+      else if (m.t === 'editcfg') {
+        try {
+          document.documentElement.classList.add('cfgmode');
+          setTimeout(() => document.querySelector('input,textarea,select,button')?.focus({ preventScroll:true }), 280);
+        } catch { }
+      }
       else if (m.t === 'folder') { const fn = pickQ.shift(); if (fn) try { fn(m.path || null); } catch { } }
       else (evs[m.t] || []).forEach(fn => { try { fn(m); } catch { } });
     });
@@ -93,7 +114,10 @@
     try {
       if (pending) { const p = pending; pending = null; apply(p); }
       localize(document.body);
-      if (english) new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(localize)))
+      if (english) new MutationObserver(records => records.forEach(r => {
+        if (r.type === 'characterData') localize(r.target);
+        else r.addedNodes.forEach(localize);
+      }))
         .observe(document.body, { childList: true, subtree: true, characterData: true });
       // 减号徽章（样式在 widget.css，仅编辑态可见/可点）
       const b = document.createElement('div');
@@ -108,11 +132,18 @@
     e.preventDefault();
     post({ t: 'menu', x: e.screenX, y: e.screenY });
   }, true);
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !document.documentElement?.classList.contains('cfgmode')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.mw?.exitCfg();
+  }, true);
 
   // 拖拽摆位（原型验证过的机制原样保留）
   let sx = 0, sy = 0, armed = false, dragging = false;
   addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
+    if (e.target.closest?.('input, textarea, select, button, a, [contenteditable="true"]')) return;
     armed = true; dragging = false; sx = e.screenX; sy = e.screenY;
   }, true);
   addEventListener('pointermove', e => {

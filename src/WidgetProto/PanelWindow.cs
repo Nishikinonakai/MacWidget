@@ -19,15 +19,13 @@ public sealed class PanelWindow : Window
     CoreWebView2? _core;
     bool _pendingShow;
     System.Windows.Threading.DispatcherTimer? _deactivateCheck;
-    System.Windows.Threading.DispatcherTimer? _windowAnimation;
+    EventHandler? _windowAnimationFrame;
     Rect _shownRect;
 
     PanelWindow()
     {
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        // The HWND itself moves with the panel animation. This keeps the native
-        // acrylic surface and the visible rounded panel in the same rectangle.
         AllowsTransparency = false;
         ShowInTaskbar = false;
         ShowActivated = true;      // 搜索框要键盘
@@ -47,11 +45,17 @@ public sealed class PanelWindow : Window
             Dwm.ExtendIntoClient(h);
             Dwm.SetDark(h, ColorMode.Dark);
             Dwm.SetBackdrop(h, ColorMode.TransparencyEnabled ? PanelMaterial() : "none");
-            Dwm.SetSquareCorners(h);
-            Native.ApplyRoundedRegion(h, 16);
+            // Let Windows 11 own the gallery outline. A custom HRGN both
+            // overrode DWMWA_WINDOW_CORNER_PREFERENCE and produced jagged arcs.
+            Dwm.SetRoundCorners(h);
         };
         Loaded += OnLoaded;
-        Closed += (_, _) => Existing = null;
+        Closed += (_, _) =>
+        {
+            StopPickLoop();
+            StopPanelAnimation();
+            Existing = null;
+        };
         // macOS 语义：点 Done 或点桌面退出编辑模式（点桌面/切走 = 面板失活；拖出进行中除外——
         // 拖出全程鼠标不点别处，不会触发失活）。
         // ⚠️点组件（徽章/拖拽）时 WebView2 子窗会抢激活——同进程内的焦点腾挪不算"离开"，
@@ -103,7 +107,7 @@ public sealed class PanelWindow : Window
 
     public void ShowPanel()
     {
-        _windowAnimation?.Stop();
+        StopPanelAnimation();
         // 编辑是从当前鼠标所在桌面进入的；面板应留在那块屏幕，而不是总回主屏。
         Native.GetCursorPos(out var cursor);
         var display = DisplayTopology.ForPoint(new Point(cursor.X, cursor.Y));
@@ -138,7 +142,11 @@ public sealed class PanelWindow : Window
     public void HidePanel()
     {
         Post("""{"t":"hide"}""");
-        if (!IsVisible || PresentationSource.FromVisual(this) is not HwndSource src) { Hide(); return; }
+        if (!IsVisible || PresentationSource.FromVisual(this) is not HwndSource src)
+        {
+            Hide();
+            return;
+        }
         var from = DisplayTopology.RectOf(src.Handle);
         var to = new Rect(_shownRect.Left, _shownRect.Bottom, _shownRect.Width, _shownRect.Height);
         AnimatePanel(src.Handle, from, to, hideAtEnd: true);
@@ -150,7 +158,7 @@ public sealed class PanelWindow : Window
         {
             Dwm.SetDark(src.Handle, ColorMode.Dark);
             Dwm.SetBackdrop(src.Handle, ColorMode.TransparencyEnabled ? PanelMaterial() : "none");
-            Native.ApplyRoundedRegion(src.Handle, 16);
+            Dwm.SetRoundCorners(src.Handle);
         }
         var installed = Application.Current.Windows.OfType<WidgetWindow>()
             .Where(w => w.IsVisible).Select(w => w.Kind).Distinct().ToArray();
@@ -166,8 +174,6 @@ public sealed class PanelWindow : Window
     }
 
     void Post(string json) { try { _core?.PostWebMessageAsJson(json); } catch { } }
-
-    static string PanelMaterial() => ColorMode.Dark ? "wca" : "wcalight";
 
     void OnWebMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -187,7 +193,7 @@ public sealed class PanelWindow : Window
     // ---- 拖出放置：宿主光标循环 ----
 
     WidgetWindow? _pick;
-    System.Windows.Threading.DispatcherTimer? _pickTimer;
+    EventHandler? _pickFrame;
 
     void StartPickup(string kind)
     {
@@ -205,17 +211,16 @@ public sealed class PanelWindow : Window
         Post("""{"t":"pickup"}""");
         AnimateForPickup(hide: true);
         Program.Log($"panel pickup {kind}");
-        _pickTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _pickTimer.Tick += (_, _) => PickTick();
-        _pickTimer.Start();
+        _pickFrame = (_, _) => PickTick();
+        CompositionTarget.Rendering += _pickFrame;
     }
 
     void PickTick()
     {
-        if (_pick == null) { _pickTimer?.Stop(); return; }
+        if (_pick == null) { StopPickLoop(); return; }
         Native.GetCursorPos(out var pt);
         var current = _pick.PhysicalBounds;
-        var candidate = _pick.RectAt(pt.X - current.Width / 2, pt.Y - current.Height / 2);
+        var candidate = _pick.RectAt(pt.X - current.Width / 2, pt.Y - current.Height / 2, current);
         bool down = (Native.GetAsyncKeyState(0x01 /*VK_LBUTTON*/) & 0x8000) != 0;
         _pick.MoveToPhysical(candidate);
         WidgetLink.Send();
@@ -227,7 +232,7 @@ public sealed class PanelWindow : Window
             return;
         }
         // 松手：面板范围内 = 取消（拖回收回），其余按引擎落位
-        _pickTimer!.Stop(); _pickTimer = null;
+        StopPickLoop();
         GhostWindow.Instance.HideGhost();
         var panel = _shownRect;
         bool overPanel = IsVisible && panel.Contains(new Point(pt.X, pt.Y));
@@ -248,6 +253,13 @@ public sealed class PanelWindow : Window
         PushState(); // 放置或取消后刷新 Suggestions，优先推荐尚未摆到桌面的组件。
     }
 
+    void StopPickLoop()
+    {
+        if (_pickFrame == null) return;
+        CompositionTarget.Rendering -= _pickFrame;
+        _pickFrame = null;
+    }
+
     void AnimateForPickup(bool hide)
     {
         if (!IsVisible || PresentationSource.FromVisual(this) is not HwndSource src || _shownRect.IsEmpty) return;
@@ -258,15 +270,13 @@ public sealed class PanelWindow : Window
 
     void AnimatePanel(IntPtr hwnd, Rect from, Rect to, bool hideAtEnd)
     {
-        _windowAnimation?.Stop();
-        var started = DateTime.UtcNow;
-        _windowAnimation = new System.Windows.Threading.DispatcherTimer
+        StopPanelAnimation();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        const double durationMs = 240;
+        _windowAnimationFrame = (_, _) =>
         {
-            Interval = TimeSpan.FromMilliseconds(16),
-        };
-        _windowAnimation.Tick += (_, _) =>
-        {
-            double t = Math.Clamp((DateTime.UtcNow - started).TotalMilliseconds / 280.0, 0, 1);
+            double t = Math.Clamp(clock.Elapsed.TotalMilliseconds / durationMs, 0, 1);
+            // Windows 11 Start-style deceleration: quick response, soft landing.
             double eased = 1 - Math.Pow(1 - t, 3);
             var frame = new Rect(
                 from.Left + (to.Left - from.Left) * eased,
@@ -274,17 +284,23 @@ public sealed class PanelWindow : Window
                 to.Width, to.Height);
             MovePanel(hwnd, frame);
             if (t < 1) return;
-            _windowAnimation!.Stop();
+            StopPanelAnimation();
             if (hideAtEnd) Hide();
         };
-        _windowAnimation.Start();
+        CompositionTarget.Rendering += _windowAnimationFrame;
+    }
+
+    void StopPanelAnimation()
+    {
+        if (_windowAnimationFrame == null) return;
+        CompositionTarget.Rendering -= _windowAnimationFrame;
+        _windowAnimationFrame = null;
     }
 
     static void MovePanel(IntPtr hwnd, Rect frame)
-    {
-        Native.MoveWindow(hwnd, (int)Math.Round(frame.Left), (int)Math.Round(frame.Top),
-            (int)Math.Round(frame.Width), (int)Math.Round(frame.Height), true);
-        Native.ApplyRoundedRegion(hwnd, 16);
-    }
+        => Native.MoveCompositedWindow(hwnd, (int)Math.Round(frame.Left), (int)Math.Round(frame.Top),
+            (int)Math.Round(frame.Width), (int)Math.Round(frame.Height));
+
+    static string PanelMaterial() => ColorMode.Dark ? "wca" : "wcalight";
 
 }

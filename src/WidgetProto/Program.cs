@@ -59,6 +59,7 @@ public static class Program
             {
                 await TopologyWatcher.WaitForStableTopologyAsync();
                 ProductSettings.Load();
+                await WallpaperBackdrop.InitializeAsync();
                 Autostart.EnsureConfigured();
                 DataHub.Register(new SysMonProvider());   // 数据源注册（有订阅者才开采样）
                 DataHub.Register(new MusicProvider());

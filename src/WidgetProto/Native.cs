@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace WidgetProto;
 
@@ -22,10 +24,30 @@ public static class Native
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    const uint SWP_NOZORDER = 0x0004;
+    const uint SWP_NOACTIVATE = 0x0010;
+    const uint SWP_NOOWNERZORDER = 0x0200;
+    const uint SWP_NOSENDCHANGING = 0x0400;
+
+    /// <summary>
+    /// Moves a DWM-composed window without MoveWindow's synchronous WM_PAINT.
+    /// WebView2 content is already a retained composition surface, so asking it
+    /// to repaint on every pointer frame only adds latency and GPU uploads.
+    /// </summary>
+    public static bool MoveCompositedWindow(IntPtr hwnd, int x, int y, int width, int height)
+        => SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
+
     [DllImport("gdi32.dll")]
     static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
 
-    [DllImport("user32.dll")]
+    [DllImport("gdi32.dll")]
+    static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    static extern int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int mode);
+
+    [DllImport("user32.dll", SetLastError = true)]
     static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
 
     [DllImport("gdi32.dll")]
@@ -47,9 +69,68 @@ public static class Native
         double scale = GetDpiForWindow(hwnd) / 96.0;
         int inset = Math.Max(0, (int)Math.Round(insetDiu * scale));
         int diameter = Math.Max(2, (int)Math.Round(radiusDiu * scale * 2));
-        var region = CreateRoundRectRgn(inset, inset, width - inset + 1, height - inset + 1, diameter, diameter);
+        var region = CreateRoundRectRgn(inset, inset, width - inset, height - inset, diameter, diameter);
         if (region == IntPtr.Zero) return;
-        if (SetWindowRgn(hwnd, region, true) == 0) DeleteObject(region);
+        if (SetWindowRgn(hwnd, region, true) == 0)
+        {
+            Program.Log($"SetWindowRgn failed (rounded), error={Marshal.GetLastWin32Error()}");
+            DeleteObject(region);
+        }
+    }
+
+    /// <summary>
+    /// The binary native outline deliberately sits in the transparent gutter,
+    /// leaving Chromium to antialias the visible card. While editing, a generous
+    /// ellipse admits the badge without exposing a rectangular fragment of the
+    /// card shadow.
+    /// </summary>
+    public static void ApplyWidgetRegion(IntPtr hwnd, double cardInsetDiu, double cardRadiusDiu, bool editing)
+    {
+        if (!GetWindowRect(hwnd, out var r)) return;
+        int width = r.Right - r.Left, height = r.Bottom - r.Top;
+        if (width <= 1 || height <= 1) return;
+
+        double scale = GetDpiForWindow(hwnd) / 96.0;
+        // The CSS card is inset by 8 DIP. Put the HRGN at the outside of that
+        // gutter so its 1-bit edge never cuts Chromium's partially covered pixels
+        // or the card shadow.
+        int diameter = Math.Max(2, (int)Math.Ceiling((cardInsetDiu + cardRadiusDiu) * scale * 2));
+        var card = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
+        if (card == IntPtr.Zero) return;
+
+        if (editing)
+        {
+            // The badge itself is 22 DIP and begins at (3,3); include its blur
+            // inside a larger ellipse whose binary edge lands on transparent pixels.
+            int badgeChannel = Math.Max(2, (int)Math.Ceiling(38 * scale));
+            var badgeRegion = CreateEllipticRgn(0, 0, badgeChannel, badgeChannel);
+            if (badgeRegion != IntPtr.Zero)
+            {
+                CombineRgn(card, card, badgeRegion, 2 /* RGN_OR */);
+                DeleteObject(badgeRegion);
+            }
+        }
+        if (SetWindowRgn(hwnd, card, true) == 0)
+        {
+            Program.Log($"SetWindowRgn failed (widget), error={Marshal.GetLastWin32Error()}");
+            DeleteObject(card);
+        }
+    }
+
+    /// <summary>Repeats a region application after WPF has committed the first real HWND size.</summary>
+    public static void ApplyAfterFirstLayout(Window window, Action<IntPtr> apply)
+    {
+        RoutedEventHandler? loaded = null;
+        loaded = (_, _) =>
+        {
+            window.Loaded -= loaded;
+            _ = window.Dispatcher.BeginInvoke(() =>
+            {
+                if (PresentationSource.FromVisual(window) is HwndSource source)
+                    apply(source.Handle);
+            }, DispatcherPriority.Render);
+        };
+        window.Loaded += loaded;
     }
 
     // ---- Automatic 着色状态机 / 面板拖出 所需 ----

@@ -16,11 +16,12 @@ internal static class WeatherSearch
         return client;
     }
 
-    public static async Task<object[]> FindAsync(string query)
+    public static async Task<object[]> FindAsync(string query, string language)
     {
         query = query.Trim();
         if (query.Length is < 2 or > 120) return [];
-        var url = "https://geocoding-api.open-meteo.com/v1/search?count=8&language=zh&format=json&name=" +
+        language = language == "en" ? "en" : "zh";
+        var url = $"https://geocoding-api.open-meteo.com/v1/search?count=8&language={language}&format=json&name=" +
                   Uri.EscapeDataString(query);
         using var response = await Http.GetAsync(url);
         response.EnsureSuccessStatusCode();
