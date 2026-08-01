@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace WidgetProto;
 
 /// <summary>
-/// 产品级偏好（与按分辨率分桶的 widgets.json 分开）：安装目录可被升级覆盖，所有用户状态
+/// 产品级偏好（与自适应工作区 layout.json 分开）：安装目录可被升级覆盖，所有用户状态
 /// 一律住在 %LOCALAPPDATA%\MacWidget。当前只保存自启选择，后续产品偏好在这里扩展。
 /// </summary>
 internal static class ProductSettings

@@ -59,7 +59,7 @@
       post({ t: 'cmd', topic: topic, cmd: cmd });
     },
     // ---- 组件设置流（编辑小组件翻面）----
-    cfg() { return cfg; },                             // 当前实例配置（宿主持久化在 widgets.json）
+    cfg() { return cfg; },                             // 当前实例配置（宿主持久化在布局文件）
     lang() { return (window.__mwInit && window.__mwInit.lang) || 'zh'; },
     saveCfg(c) { cfg = c; post({ t: 'cfg', cfg: c }); },
     pickFolder(fn) { pickQ.push(fn); post({ t: 'pickfolder' }); },   // 原生选文件夹，fn(path|null)

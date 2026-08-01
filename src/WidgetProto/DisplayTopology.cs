@@ -1,5 +1,8 @@
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Windows;
+using Microsoft.Win32;
 
 namespace WidgetProto;
 
@@ -71,10 +74,9 @@ public static class DisplayTopology
             return true;
         }, IntPtr.Zero);
 
-        // 同一台电视的多个 HDMI 输入会给 Windows 相同 EDID。旧代码按枚举顺序追加 #2，
-        // 而热插拔后的枚举顺序没有稳定性，可能把两路输入的组件布局对调。DISPLAYn 是
-        // Windows 当前图形路径的稳定连接标识；只在 EDID 重复时纳入 key，单屏旧 key 不变。
-        var baseKeys = raw.Select(item => EdidKey(item.Info.szDevice) ?? DeviceKey(item.Info.szDevice)).ToList();
+        // 同一台电视的多个活动输入会给 Windows 相同 EDID 序列号。按序列号生成的面板 key 重复时，
+        // 用 DISPLAYn 当前图形路径消歧；这只影响同时出现的重复目标，不让普通接口切换改变单屏身份。
+        var baseKeys = raw.Select(item => MonitorKey(item.Info.szDevice) ?? DeviceKey(item.Info.szDevice)).ToList();
         var duplicateCounts = baseKeys
             .GroupBy(key => key, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
@@ -123,7 +125,7 @@ public static class DisplayTopology
 
     static Rect ToRect(Native.RECT r) => new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
 
-    static string? EdidKey(string adapterDevice)
+    static string? MonitorKey(string adapterDevice)
     {
         string? fallback = null;
         for (uint i = 0; i < 8; i++)
@@ -131,12 +133,80 @@ public static class DisplayTopology
             var display = new DisplayDevice { cb = Marshal.SizeOf<DisplayDevice>() };
             if (!EnumDisplayDevicesW(adapterDevice, i, ref display, 0)) break;
             var parts = display.DeviceID.Split('\\');
-            string? key = parts.Length >= 2 && parts[1].Length > 0 ? parts[1] : null;
+            string? hardwareKey = parts.Length >= 2 && parts[1].Length > 0 ? parts[1] : null;
+            string? key = StableEdidKey(display, hardwareKey) ?? hardwareKey;
             if (key == null) continue;
             if ((display.StateFlags & DisplayDeviceActive) != 0) return key;
             fallback ??= key;
         }
         return fallback;
+    }
+
+    /// <summary>
+    /// Windows 的 MONITOR\DEL41A5 只是 EDID 产品代码，同一块面板换 HDMI/DP 后也可能改变。
+    /// 有序列号时改用“厂商 + 型号名 + 序列号”的哈希；连接路径仅在两个活动目标确实重名时消歧。
+    /// </summary>
+    static string? StableEdidKey(DisplayDevice display, string? hardwareKey)
+    {
+        try
+        {
+            byte[]? edid = ReadEdid(display, hardwareKey);
+            if (edid == null || edid.Length < 18) return null;
+
+            string? serialText = Descriptor(edid, 0xFF);
+            uint numericSerial = BitConverter.ToUInt32(edid, 12);
+            string? serial = !string.IsNullOrWhiteSpace(serialText) ? serialText
+                : numericSerial != 0 ? numericSerial.ToString("X8") : null;
+            if (serial == null) return null; // 无序列号的同型号双屏不能安全合并。
+
+            string model = Descriptor(edid, 0xFC) ?? "DISPLAY";
+            string manufacturer = Manufacturer(edid);
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{manufacturer}|{model}|{serial}"));
+            return "MON-" + Convert.ToHexString(hash.AsSpan(0, 8));
+        }
+        catch { return null; }
+    }
+
+    static byte[]? ReadEdid(DisplayDevice display, string? hardwareKey)
+    {
+        if (string.IsNullOrWhiteSpace(hardwareKey)) return null;
+        string driver = display.DeviceKey;
+        int classMarker = driver.IndexOf(@"\Control\Class\", StringComparison.OrdinalIgnoreCase);
+        if (classMarker >= 0) driver = driver[(classMarker + @"\Control\Class\".Length)..];
+
+        using var monitor = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Enum\DISPLAY\{hardwareKey}");
+        if (monitor == null) return null;
+        byte[]? fallback = null;
+        foreach (string instanceName in monitor.GetSubKeyNames())
+        {
+            using var instance = monitor.OpenSubKey(instanceName);
+            using var parameters = instance?.OpenSubKey("Device Parameters");
+            if (parameters?.GetValue("EDID") is not byte[] candidate) continue;
+            fallback ??= candidate;
+            if (string.Equals(instance?.GetValue("Driver") as string, driver, StringComparison.OrdinalIgnoreCase))
+                return candidate;
+        }
+        return fallback;
+    }
+
+    static string? Descriptor(byte[] edid, byte tag)
+    {
+        for (int offset = 54; offset + 18 <= edid.Length && offset <= 108; offset += 18)
+        {
+            if (edid[offset] != 0 || edid[offset + 1] != 0 || edid[offset + 3] != tag) continue;
+            string value = Encoding.ASCII.GetString(edid, offset + 5, 13).Trim('\0', '\r', '\n', ' ');
+            if (value.Length > 0) return value;
+        }
+        return null;
+    }
+
+    static string Manufacturer(byte[] edid)
+    {
+        int value = edid[8] << 8 | edid[9];
+        return string.Concat(
+            (char)('A' + ((value >> 10) & 31) - 1),
+            (char)('A' + ((value >> 5) & 31) - 1),
+            (char)('A' + (value & 31) - 1));
     }
 
     static string DeviceKey(string device)

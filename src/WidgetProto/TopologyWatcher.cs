@@ -107,7 +107,8 @@ public static class TopologyWatcher
         _restarting = true;
         try
         {
-            // 先把旧拓扑的物理坐标写入各自桶；子实例会在新拓扑中按可见屏幕读取对应桶。
+            // 普通重启同步落盘；若 Windows 已切到新拓扑，Layout 会拒绝把旧窗口误写进新工作区。
+            // 子实例随后按稳定后的单屏/多屏工作区做身份映射和坐标自适应。
             Layout.SaveImmediately();
             WidgetLink.Send(force: true);
 

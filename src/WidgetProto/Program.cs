@@ -98,6 +98,8 @@ public static class Program
                         new WidgetWindow(NextId(), it.Kind, it.Size, Layout.PositionOf(it), cfg: it.Cfg).Show();
                 }
                 Log("all windows shown");
+                // 首次从 v2 恢复后立即建立单屏/多屏自适应档；也会记住用户主动清空的桌面。
+                Layout.Save();
 
                 ColorMode.Start();   // Automatic 着色状态机（含深浅外观跟随）
                 Tray.Install();      // 托盘：编辑/退出入口
@@ -128,6 +130,7 @@ public static class Program
 
     public static void RequestShutdown()
     {
+        Layout.SaveImmediately();
         Tray.Uninstall();
         Application.Current.Shutdown();
     }

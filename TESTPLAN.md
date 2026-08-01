@@ -125,9 +125,10 @@ Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runti
 `--without-macdesk`：它禁用 MacDesk 命名事件、避让管道及强调色读取，组件库的完成按钮应回退系统蓝。
 
 接入第二个逻辑显示器后先运行只读观测器；它使用 `EnumDisplayMonitors` 并把调用线程设为 PMv2，
-不能用遗留 `Win32_DesktopMonitor` 的计数代替。相同 EDID 的双 HDMI 输入应报告两个 `DISPLAYn` 路径，
-MacWidget 启动日志应使用 `EDID@DISPLAYn` 作为稳定布局键。随后至少验证：两个显示器各有一枚组件、
-将鼠标移到副屏后打开的组件库落在副屏、以及热插拔/显示模式变化后的单实例交接。
+不能用遗留 `Win32_DesktopMonitor` 的计数代替。具备 EDID 序列号的显示器应报告 `MON-…` 稳定键；
+相同序列号的两个活动目标再以 `@DISPLAYn` 连接路径消歧。随后至少验证：两个显示器各有一枚组件、
+将鼠标移到副屏后打开的组件库落在副屏、单屏/多屏各自布局能够往返，以及换接口、分辨率、主屏和热插拔
+后的单实例交接不会播种默认布局或丢失组件。
 
 ```powershell
 & .\tools\observe-display-topology.ps1 | Format-List

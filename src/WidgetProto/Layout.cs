@@ -41,9 +41,9 @@ public static class WidgetRegistry
 }
 
 /// <summary>
-/// 布局持久化：按"稳定显示器标识 × 物理分辨率"分档（对齐 macOS DesktopWidgetPlacementStorage
-/// 的语义）。坐标是相对该显示器左上的物理 px，屏幕在虚拟桌面中换边/混合 DPI 时仍可复原。
-/// widgets.json 在 %LOCALAPPDATA%\MacWidget，避免应用升级覆盖用户布局；首次产品化启动会从旧 exe 旁迁移。
+/// 布局持久化：v3 按 Windows 的单屏/多屏工作区保存，显示器身份只辅助映射，不再决定布局是否存在。
+/// 坐标仍是相对显示器左上的物理 px；换接口、换屏幕或换分辨率时由 AdaptiveLayout 做边缘感知迁移。
+/// layout.json 在 %LOCALAPPDATA%\MacWidget；widgets.json 继续同步写入，作为 v2 降级兼容与迁移源。
 /// 实验模式（--n/--widget）不读不写，保护机主的正式摆位。
 /// </summary>
 public static class Layout
@@ -56,9 +56,12 @@ public static class Layout
     static string LegacyPath => System.IO.Path.Combine(Program.BaseDir, "widgets.json");
     // v1 的 bucket 是主屏工作区 DIU；只用于逐桶无损迁移。
     static string LegacyKey() => $"{SystemParameters.WorkArea.Width:F0}x{SystemParameters.WorkArea.Height:F0}";
+    static string? _loadedTopology;
 
     public static List<Entry> LoadOrDefault()
     {
+        var displays = DisplayTopology.GetAll();
+        _loadedTopology = AdaptiveLayout.Fingerprint(displays);
         try
         {
             if (!File.Exists(PathOf) && File.Exists(LegacyPath))
@@ -66,29 +69,50 @@ public static class Layout
                 File.Copy(LegacyPath, PathOf);
                 Program.Log("layout migrated from app directory");
             }
+            if (AdaptiveLayout.TryLoad(displays, allowOther: false, out var adaptive))
+            {
+                Program.Log($"adaptive layout loaded: {adaptive.Count} widgets in {(displays.Count == 1 ? "single" : "multi")} workspace");
+                return adaptive;
+            }
             if (File.Exists(PathOf))
             {
                 var doc = Read();
                 bool changed = false;
                 var list = new List<Entry>();
-                foreach (var screen in DisplayTopology.GetAll())
+                int matched = 0;
+                foreach (var screen in displays)
                 {
                     changed |= MigrateAmbiguousDuplicateBucket(doc, screen);
                     changed |= MigrateLegacyPrimaryBucket(doc, screen);
-                    if (doc.TryGetValue(screen.LayoutKey, out var bucket)) list.AddRange(bucket);
+                    if (doc.TryGetValue(screen.LayoutKey, out var bucket))
+                    {
+                        matched++;
+                        list.AddRange(bucket);
+                    }
                 }
                 if (changed) Write(doc);
-                if (list.Count > 0)
+                if (matched == displays.Count)
                 {
-                    Program.Log($"layout loaded: {list.Count} widgets across {DisplayTopology.GetAll().Count} display(s)");
+                    Program.Log($"legacy layout loaded: {list.Count} widgets across {displays.Count} display(s)");
                     return list;
                 }
+                if (AdaptiveLayout.TryAdaptLegacy(doc, displays, out var migrated))
+                {
+                    Program.Log($"legacy layout adapted: {migrated.Count} widgets across {displays.Count} display(s)");
+                    return migrated;
+                }
+                if (matched > 0) return list;
+            }
+            if (AdaptiveLayout.TryLoad(displays, allowOther: true, out var bridged))
+            {
+                Program.Log($"adaptive layout bridged: {bridged.Count} widgets into {(displays.Count == 1 ? "single" : "multi")} workspace");
+                return bridged;
             }
         }
         catch (Exception ex) { Program.Log("layout load FAIL (falling back to default): " + ex.Message); }
 
         // 默认演示组：主屏右上角 时钟+日历 并组，天气 Medium 垫底。
-        var display = DisplayTopology.Primary();
+        var display = displays.FirstOrDefault(item => item.IsPrimary) ?? DisplayTopology.Primary();
         double u = Placement.Unit * display.Scale, edge = Placement.EdgeMargin * display.Scale;
         double bx = display.Work.Right - display.Physical.Left - edge - u * 2;
         double by = display.Work.Top - display.Physical.Top + edge;
@@ -139,8 +163,15 @@ public static class Layout
     {
         try
         {
-            var doc = Read();
             var displays = DisplayTopology.GetAll();
+            string currentTopology = AdaptiveLayout.Fingerprint(displays);
+            if (_loadedTopology != null && !string.Equals(_loadedTopology, currentTopology, StringComparison.Ordinal))
+            {
+                Program.Log("layout save skipped: display topology changed before handoff");
+                return;
+            }
+
+            var doc = Read();
             foreach (var display in displays) MigrateLegacyPrimaryBucket(doc, display);
             var buckets = displays.ToDictionary(d => d.LayoutKey, _ => new List<Entry>());
             foreach (Window w in Application.Current.Windows)
@@ -156,6 +187,7 @@ public static class Layout
             // 已断开的显示器桶不触碰；当前屏空桶要写回，才会正确记住"此屏已清空"。
             foreach (var (key, bucket) in buckets) doc[key] = bucket;
             Write(doc);
+            AdaptiveLayout.Save(displays, buckets.Values.SelectMany(bucket => bucket).ToList());
             Program.Log($"layout saved: {buckets.Sum(b => b.Value.Count)} widgets across {buckets.Count} display(s)");
         }
         catch (Exception ex) { Program.Log("layout save FAIL: " + ex.Message); }
@@ -169,11 +201,13 @@ public static class Layout
     static void Write(Dictionary<string, List<Entry>> doc)
     {
         Directory.CreateDirectory(Program.DataDir);
-        File.WriteAllText(PathOf, JsonSerializer.Serialize(doc, new JsonSerializerOptions
+        string temporary = PathOf + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(doc, new JsonSerializerOptions
         {
             WriteIndented = true,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         }));
+        File.Move(temporary, PathOf, overwrite: true);
     }
 
     /// <summary>
