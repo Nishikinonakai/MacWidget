@@ -5,17 +5,25 @@ using System.Windows;
 namespace WidgetProto;
 
 /// <summary>
-/// v3 layout semantics: one workspace for single-display Windows and one for extended multi-display Windows.
-/// Monitor identity helps map surfaces but never decides whether the user's widgets exist.
+/// v4 layout semantics: one rolling workspace containing the user's latest arrangement.
+/// Display identity helps map surfaces, while resolution/work-area changes only adapt and compact that arrangement.
+/// A topology that reappears must never resurrect an older single/multi-display archive.
 /// </summary>
 internal static class AdaptiveLayout
 {
-    const int Version = 3;
+    const int Version = 4;
     static string PathOf => System.IO.Path.Combine(Program.DataDir, "layout.json");
 
     sealed class Document
     {
         public int Version { get; set; } = AdaptiveLayout.Version;
+        public Profile? Current { get; set; }
+    }
+
+    // v3 wrote two independent histories. Upgrade by choosing the one the user touched most recently.
+    sealed class V3Document
+    {
+        public int Version { get; set; }
         public Profile? Single { get; set; }
         public Profile? Multi { get; set; }
     }
@@ -43,24 +51,21 @@ internal static class AdaptiveLayout
             .OrderBy(display => display.Physical.Left)
             .ThenBy(display => display.Physical.Top)
             .Select(display => $"{display.Key}:{display.Physical.Left:F0},{display.Physical.Top:F0}," +
-                               $"{display.Physical.Width:F0}x{display.Physical.Height:F0}@{display.Dpi}"));
+                               $"{display.Physical.Width:F0}x{display.Physical.Height:F0};" +
+                               $"work={display.Work.Left:F0},{display.Work.Top:F0}," +
+                               $"{display.Work.Width:F0}x{display.Work.Height:F0}@{display.Dpi}" +
+                               (display.IsPrimary ? "*" : "")));
 
-    /// <summary>Load the matching single/multi profile. allowOther is the last-resort bridge on first use.</summary>
-    public static bool TryLoad(IReadOnlyList<DisplayTopology.Display> displays, bool allowOther,
-                               out List<Layout.Entry> entries)
+    /// <summary>Load and adapt the latest workspace, irrespective of the current display count.</summary>
+    public static bool TryLoad(IReadOnlyList<DisplayTopology.Display> displays, out List<Layout.Entry> entries)
     {
         entries = new();
         if (!File.Exists(PathOf)) return false;
         try
         {
-            var document = JsonSerializer.Deserialize<Document>(File.ReadAllText(PathOf));
-            if (document?.Version != Version) return false;
-            Profile? profile = displays.Count == 1 ? document.Single : document.Multi;
-            if (profile == null && allowOther)
-                profile = displays.Count == 1 ? document.Multi : document.Single;
-            if (profile == null || profile.Displays.Count == 0) return false;
-
-            entries = AdaptProfile(profile, displays);
+            var adapted = AdaptSerialized(File.ReadAllText(PathOf), displays);
+            if (adapted == null) return false;
+            entries = adapted;
             return true; // An empty profile intentionally means an empty desktop.
         }
         catch (Exception ex)
@@ -68,6 +73,24 @@ internal static class AdaptiveLayout
             Program.Log("adaptive layout load FAIL (trying legacy): " + ex.Message);
             return false;
         }
+    }
+
+    /// <summary>Pure document adapter shared with the executable topology regression scenarios.</summary>
+    internal static List<Layout.Entry>? AdaptSerialized(
+        string json, IReadOnlyList<DisplayTopology.Display> displays)
+    {
+        using var root = JsonDocument.Parse(json);
+        if (!root.RootElement.TryGetProperty("Version", out var versionValue) ||
+            versionValue.ValueKind != JsonValueKind.Number) return null;
+
+        int version = versionValue.GetInt32();
+        Profile? profile = version switch
+        {
+            Version => JsonSerializer.Deserialize<Document>(json)?.Current,
+            3 => LatestV3Profile(JsonSerializer.Deserialize<V3Document>(json)),
+            _ => null,
+        };
+        return profile == null || profile.Displays.Count == 0 ? null : AdaptProfile(profile, displays);
     }
 
     /// <summary>
@@ -129,14 +152,20 @@ internal static class AdaptiveLayout
 
     public static void Save(IReadOnlyList<DisplayTopology.Display> displays, List<Layout.Entry> widgets)
     {
-        Document document = File.Exists(PathOf)
-            ? JsonSerializer.Deserialize<Document>(File.ReadAllText(PathOf)) ?? new()
-            : new();
-        document.Version = Version;
-        var profile = new Profile(DateTime.UtcNow, displays.Select(FromDisplay).ToList(), widgets);
-        if (displays.Count == 1) document.Single = profile;
-        else document.Multi = profile;
+        var document = new Document
+        {
+            Version = Version,
+            Current = new Profile(DateTime.UtcNow, displays.Select(FromDisplay).ToList(), widgets),
+        };
         WriteAtomically(PathOf, JsonSerializer.Serialize(document, JsonOptions));
+    }
+
+    static Profile? LatestV3Profile(V3Document? document)
+    {
+        if (document?.Version != 3) return null;
+        if (document.Single == null) return document.Multi;
+        if (document.Multi == null) return document.Single;
+        return document.Single.UpdatedUtc >= document.Multi.UpdatedUtc ? document.Single : document.Multi;
     }
 
     static List<Layout.Entry> AdaptProfile(Profile profile, IReadOnlyList<DisplayTopology.Display> targets)
@@ -270,6 +299,14 @@ internal static class AdaptiveLayout
                 var settled = Placement.Resolve(candidate, occupied[display.Key], display.Work,
                     Placement.Unit * display.Scale, margin);
                 candidate = new Rect(settled.L, settled.T, candidate.Width, candidate.Height);
+                if (!Fits(candidate, safe, occupied[display.Key]))
+                {
+                    var free = FindNearestFree(candidate, safe, occupied[display.Key],
+                        Placement.Unit * display.Scale);
+                    if (free is { } position) candidate = position;
+                    else Program.Log($"adaptive layout capacity exhausted on {display.Key}; " +
+                                     $"keeping {entry.Kind} visible with unavoidable overlap");
+                }
             }
             occupied[display.Key].Add(candidate);
             result.Add(entry with
@@ -281,6 +318,43 @@ internal static class AdaptiveLayout
         }
         return result;
     }
+
+    static bool Fits(Rect candidate, Rect safe, IReadOnlyList<Rect> occupied)
+        => candidate.Left >= safe.Left && candidate.Top >= safe.Top &&
+           candidate.Right <= safe.Right && candidate.Bottom <= safe.Bottom &&
+           !occupied.Any(other => candidate.IntersectsWith(Shrink(other, 0.5)));
+
+    /// <summary>
+    /// A disconnected display can fold several widgets onto a smaller work area. Placement.Resolve intentionally
+    /// searches only around the nearest group; migration needs a whole-work-area fallback so widgets compact into
+    /// any free cell before accepting an unavoidable overlap.
+    /// </summary>
+    static Rect? FindNearestFree(Rect desired, Rect safe, IReadOnlyList<Rect> occupied, double unit)
+    {
+        int columns = (int)Math.Floor((safe.Width - desired.Width) / unit) + 1;
+        int rows = (int)Math.Floor((safe.Height - desired.Height) / unit) + 1;
+        if (columns <= 0 || rows <= 0) return null;
+
+        Rect? best = null;
+        double bestDistance = double.MaxValue;
+        for (int row = 0; row < rows; row++)
+        for (int column = 0; column < columns; column++)
+        {
+            var candidate = new Rect(safe.Left + column * unit, safe.Top + row * unit,
+                desired.Width, desired.Height);
+            if (!Fits(candidate, safe, occupied)) continue;
+            double dx = candidate.Left - desired.Left, dy = candidate.Top - desired.Top;
+            double distance = dx * dx + dy * dy;
+            if (distance >= bestDistance) continue;
+            best = candidate;
+            bestDistance = distance;
+        }
+        return best;
+    }
+
+    static Rect Shrink(Rect rect, double amount) => new(
+        rect.X + amount, rect.Y + amount,
+        Math.Max(0, rect.Width - amount * 2), Math.Max(0, rect.Height - amount * 2));
 
     static SavedDisplay FromDisplay(DisplayTopology.Display display) => new(
         display.Key,

@@ -10,6 +10,7 @@ public sealed class Options
     public string Widget = "mixed";     // 实验模式的组件种类
     public string Glass = "extend";     // extend（透明表面防黑底，必须）| none
     public string Style = "auto";       // auto | full | mono —— Widget style 三档（macOS 语义）
+    public bool StyleSpecified;          // 显式 --style 是运维/测试覆盖；否则可从 MacDesk 继承偏好
     public string Appearance = "auto";  // auto | dark | light —— 仅测试覆盖，不写入 Windows 主题
     public bool WithoutMacDesk;          // 运维/回归入口：模拟独立安装，不启用任一 MacDesk 联动通道
     public bool Dark = true;            // 实验模式初值；产品模式由 ColorMode 每 tick 读注册表接管
@@ -36,7 +37,7 @@ public sealed class Options
                 case "--pin": o.Pin = Next(); break;
                 case "--widget": o.Widget = Next(); o.LabMode = true; break;
                 case "--glass": o.Glass = Next(); break;
-                case "--style": o.Style = Next(); break;
+                case "--style": o.Style = Next(); o.StyleSpecified = true; break;
                 case "--appearance": o.Appearance = Next(); break;
                 case "--without-macdesk": o.WithoutMacDesk = true; break;
                 case "--light": o.Dark = false; break;

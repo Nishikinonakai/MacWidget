@@ -41,7 +41,7 @@ public static class WidgetRegistry
 }
 
 /// <summary>
-/// 布局持久化：v3 按 Windows 的单屏/多屏工作区保存，显示器身份只辅助映射，不再决定布局是否存在。
+/// 布局持久化：v4 只保存用户最新的一份工作区，显示器身份只辅助映射。
 /// 坐标仍是相对显示器左上的物理 px；换接口、换屏幕或换分辨率时由 AdaptiveLayout 做边缘感知迁移。
 /// layout.json 在 %LOCALAPPDATA%\MacWidget；widgets.json 继续同步写入，作为 v2 降级兼容与迁移源。
 /// 实验模式（--n/--widget）不读不写，保护机主的正式摆位。
@@ -57,6 +57,15 @@ public static class Layout
     // v1 的 bucket 是主屏工作区 DIU；只用于逐桶无损迁移。
     static string LegacyKey() => $"{SystemParameters.WorkArea.Width:F0}x{SystemParameters.WorkArea.Height:F0}";
     static string? _loadedTopology;
+    sealed record Snapshot(IReadOnlyList<DisplayTopology.Display> Displays, List<Entry> Entries);
+    static Snapshot? _pendingSnapshot;
+
+    internal static bool LoadedTopologyIsCurrent()
+        => LoadedTopologyIsCurrent(DisplayTopology.GetAll());
+
+    static bool LoadedTopologyIsCurrent(IReadOnlyList<DisplayTopology.Display> displays)
+        => _loadedTopology == null || string.Equals(_loadedTopology,
+            AdaptiveLayout.Fingerprint(displays), StringComparison.Ordinal);
 
     public static List<Entry> LoadOrDefault()
     {
@@ -69,9 +78,9 @@ public static class Layout
                 File.Copy(LegacyPath, PathOf);
                 Program.Log("layout migrated from app directory");
             }
-            if (AdaptiveLayout.TryLoad(displays, allowOther: false, out var adaptive))
+            if (AdaptiveLayout.TryLoad(displays, out var adaptive))
             {
-                Program.Log($"adaptive layout loaded: {adaptive.Count} widgets in {(displays.Count == 1 ? "single" : "multi")} workspace");
+                Program.Log($"adaptive layout loaded: {adaptive.Count} widgets into {displays.Count} display(s)");
                 return adaptive;
             }
             if (File.Exists(PathOf))
@@ -102,11 +111,6 @@ public static class Layout
                     return migrated;
                 }
                 if (matched > 0) return list;
-            }
-            if (AdaptiveLayout.TryLoad(displays, allowOther: true, out var bridged))
-            {
-                Program.Log($"adaptive layout bridged: {bridged.Count} widgets into {(displays.Count == 1 ? "single" : "multi")} workspace");
-                return bridged;
             }
         }
         catch (Exception ex) { Program.Log("layout load FAIL (falling back to default): " + ex.Message); }
@@ -140,6 +144,7 @@ public static class Layout
     public static void Save()
     {
         if (Program.Opts.LabMode) return;
+        if (TryCapture(out var snapshot)) _pendingSnapshot = snapshot;
         _debounce ??= MakeTimer();
         _debounce.Stop(); _debounce.Start();
     }
@@ -148,6 +153,7 @@ public static class Layout
     public static void SaveImmediately()
     {
         if (Program.Opts.LabMode) return;
+        if (TryCapture(out var snapshot)) _pendingSnapshot = snapshot;
         _debounce?.Stop();
         SaveNow();
     }
@@ -161,36 +167,62 @@ public static class Layout
 
     static void SaveNow()
     {
+        var snapshot = _pendingSnapshot;
+        _pendingSnapshot = null;
+        if (snapshot == null) return;
         try
         {
-            var displays = DisplayTopology.GetAll();
-            string currentTopology = AdaptiveLayout.Fingerprint(displays);
-            if (_loadedTopology != null && !string.Equals(_loadedTopology, currentTopology, StringComparison.Ordinal))
-            {
-                Program.Log("layout save skipped: display topology changed before handoff");
-                return;
-            }
-
             var doc = Read();
-            foreach (var display in displays) MigrateLegacyPrimaryBucket(doc, display);
-            var buckets = displays.ToDictionary(d => d.LayoutKey, _ => new List<Entry>());
-            foreach (Window w in Application.Current.Windows)
-                if (w is WidgetWindow ww && ww.IsVisible)
-                {
-                    var rect = ww.PhysicalBounds;
-                    if (rect.IsEmpty) continue;
-                    var display = DisplayTopology.ForRect(rect);
-                    buckets[display.LayoutKey].Add(new Entry(ww.Kind,
-                        rect.Left - display.Physical.Left, rect.Top - display.Physical.Top,
-                        ww.SizeClass, ww.Cfg, display.Key));
-                }
+            foreach (var display in snapshot.Displays) MigrateLegacyPrimaryBucket(doc, display);
+            var buckets = snapshot.Displays.ToDictionary(d => d.LayoutKey, _ => new List<Entry>());
+            foreach (var entry in snapshot.Entries)
+            {
+                var display = snapshot.Displays.FirstOrDefault(d =>
+                    string.Equals(d.Key, entry.Display, StringComparison.OrdinalIgnoreCase));
+                if (display != null) buckets[display.LayoutKey].Add(entry);
+            }
             // 已断开的显示器桶不触碰；当前屏空桶要写回，才会正确记住"此屏已清空"。
             foreach (var (key, bucket) in buckets) doc[key] = bucket;
             Write(doc);
-            AdaptiveLayout.Save(displays, buckets.Values.SelectMany(bucket => bucket).ToList());
+            AdaptiveLayout.Save(snapshot.Displays, snapshot.Entries);
             Program.Log($"layout saved: {buckets.Sum(b => b.Value.Count)} widgets across {buckets.Count} display(s)");
         }
         catch (Exception ex) { Program.Log("layout save FAIL: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// 在当前拓扑仍与建窗时一致时立即抓取快照，磁盘写入仍防抖。这样热插拔发生在
+    /// 500ms 防抖窗口内时，交接依然能落盘旧拓扑下最新的有效坐标。
+    /// </summary>
+    static bool TryCapture(out Snapshot snapshot)
+    {
+        snapshot = null!;
+        var displays = DisplayTopology.GetAll();
+        if (!LoadedTopologyIsCurrent(displays))
+        {
+            Program.Log("layout capture skipped: display topology already changed");
+            return false;
+        }
+
+        var entries = new List<Entry>();
+        foreach (Window w in Application.Current.Windows)
+            if (w is WidgetWindow ww && ww.IsVisible)
+            {
+                var rect = ww.PhysicalBounds;
+                if (rect.IsEmpty) continue;
+                var display = displays.FirstOrDefault(d => d.Handle ==
+                    Native.MonitorFromPoint(new Native.POINT
+                    {
+                        X = (int)Math.Round(rect.Left + rect.Width / 2),
+                        Y = (int)Math.Round(rect.Top + rect.Height / 2),
+                    }, Native.MONITOR_DEFAULTTONEAREST))
+                    ?? displays.First(d => d.IsPrimary);
+                entries.Add(new Entry(ww.Kind,
+                    rect.Left - display.Physical.Left, rect.Top - display.Physical.Top,
+                    ww.SizeClass, ww.Cfg, display.Key));
+            }
+        snapshot = new Snapshot(displays.ToList(), entries);
+        return true;
     }
 
     static Dictionary<string, List<Entry>> Read()

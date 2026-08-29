@@ -39,6 +39,8 @@ public static class Program
         }
 
         Directory.CreateDirectory(DataDir);
+        if (!Opts.StyleSpecified && MacDeskAppearance.WidgetStyle() is { } linkedStyle)
+            Opts.Style = linkedStyle;
         Log($"=== start: lab={Opts.LabMode} n={Opts.N} control={Opts.Control} backdrop={Opts.Backdrop} " +
             $"origin={Opts.Origin} pin={Opts.Pin} widget={Opts.Widget} glass={Opts.Glass} style={Opts.Style} " +
             $"procpersite={Opts.ProcPerSite} noactivate={Opts.NoActivate}");

@@ -13,6 +13,8 @@ namespace WidgetProto;
 public static class TopologyWatcher
 {
     const int WmDisplayChange = 0x007E;
+    const int WmSettingChange = 0x001A;
+    const int SpiSetWorkArea = 0x002F;
 
     static HwndSource? _messageWindow;
     static System.Windows.Threading.DispatcherTimer? _debounce;
@@ -42,6 +44,8 @@ public static class TopologyWatcher
         _messageWindow = new HwndSource(p);
         _messageWindow.AddHook(WndProc);
         SystemEvents.DisplaySettingsChanged += OnSystemDisplayChanged;
+        // 拓扑可能恰好在启动稳定检查之后、消息窗口建立之前变化；主动补一次交接。
+        if (!Layout.LoadedTopologyIsCurrent()) Schedule();
     }
 
     public static void Stop()
@@ -67,8 +71,7 @@ public static class TopologyWatcher
         string? previous = null;
         for (int i = 0; i < 10; i++)
         {
-            var now = string.Join("|", DisplayTopology.GetAll().Select(d =>
-                $"{d.Key}:{d.Physical.Left:F0},{d.Physical.Top:F0},{d.Physical.Width:F0}x{d.Physical.Height:F0}@{d.Dpi}"));
+            var now = AdaptiveLayout.Fingerprint(DisplayTopology.GetAll());
             if (now == previous)
             {
                 Program.Log($"display topology stable: {now}");
@@ -82,7 +85,8 @@ public static class TopologyWatcher
 
     static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmDisplayChange)
+        if (msg == WmDisplayChange ||
+            msg == WmSettingChange && wParam.ToInt64() == SpiSetWorkArea)
         {
             Schedule();
             handled = true;

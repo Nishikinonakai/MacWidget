@@ -44,6 +44,17 @@ public static class ColorMode
         _ => _busy.Contains(monitor),
     };
 
+    /// <summary>MacDesk 实时联动入口；命名事件只传三态枚举，变化后立即广播。</summary>
+    public static void ApplyStyle(string style)
+    {
+        if (style is not ("auto" or "mono" or "full") || Program.Opts.Style == style) return;
+        Program.Opts.Style = style;
+        Program.Log($"colormode style changed by MacDesk: {style}");
+        foreach (Window w in Application.Current.Windows)
+            (w as WidgetWindow)?.PushState();
+        PanelWindow.Existing?.PushState();
+    }
+
     static void Tick()
     {
         bool dark = ReadDark();

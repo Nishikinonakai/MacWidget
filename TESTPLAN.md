@@ -122,13 +122,25 @@ Evergreen Runtime 在后台安装新版本时，MacWidget 记录 `webview2 runti
 置为 `0`（先记录原值，测试后立即还原），再执行亮/暗两组。期望日志为
 `transparency=False` 和 `backdrop none(1)`，组件库、托盘和右键菜单都应是可读的不透明表面，
 不能留下半透明残影。若要模拟用户未安装 MacDesk 的独立体验，给临时副本加
-`--without-macdesk`：它禁用 MacDesk 命名事件、避让管道及强调色读取，组件库的完成按钮应回退系统蓝。
+`--without-macdesk`：它禁用 MacDesk 命名事件、避让管道、强调色及组件着色偏好读取，组件库的完成按钮应回退系统蓝。
+正常启动（不传 `--style`）时还应继承 MacDesk `settings.json` 的 `WidgetMonoMode`。MacDesk 和
+MacWidget 同时运行时，在设置页依次点 Auto / Mono / Color，已显示组件和已打开组件库应立即变化，
+不应出现“旧版不支持实时切换”提示。
 
 接入第二个逻辑显示器后先运行只读观测器；它使用 `EnumDisplayMonitors` 并把调用线程设为 PMv2，
 不能用遗留 `Win32_DesktopMonitor` 的计数代替。具备 EDID 序列号的显示器应报告 `MON-…` 稳定键；
-相同序列号的两个活动目标再以 `@DISPLAYn` 连接路径消歧。随后至少验证：两个显示器各有一枚组件、
-将鼠标移到副屏后打开的组件库落在副屏、单屏/多屏各自布局能够往返，以及换接口、分辨率、主屏和热插拔
-后的单实例交接不会播种默认布局或丢失组件。
+相同序列号的两个活动目标再以 `@DISPLAYn` 连接路径消歧。随后至少验证：
+
+1. 两个显示器各有一枚组件，将鼠标移到副屏后打开的组件库落在副屏。
+2. 拔掉副屏后，其组件收敛到主屏且不越出工作区；再插回副屏时，保持刚刚收敛后的最新布局，不得恢复过期多屏档。
+3. 在相同分辨率的另一显示器/连接口间切换，组件保持相对坐标；降低分辨率或缩小工作区时，越界或冲突的组件尽量压紧到可用空间。
+4. 换主屏、混合 DPI 和屏幕位于主屏左/上方时，单实例交接不会播种默认布局、丢失组件或把物理坐标变成 DPI 虚拟坐标。
+
+人工拔插前先跑无 UI 场景回归；它覆盖 v3 最新档迁移、同分辨率换屏、拔屏压紧与重插不复活旧布局：
+
+```powershell
+dotnet run --project .\tests\WidgetProto.LayoutScenarios -c Release
+```
 
 ```powershell
 & .\tools\observe-display-topology.ps1 | Format-List

@@ -32,16 +32,7 @@ internal static class MacDeskAppearance
 
         try
         {
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MacDesk", "settings.json");
-            if (!File.Exists(settingsPath)) return DefaultAccent;
-
-            using var doc = JsonDocument.Parse(File.ReadAllText(settingsPath));
-            if (!doc.RootElement.TryGetProperty("AccentColor", out var value) ||
-                value.ValueKind != JsonValueKind.String) return DefaultAccent;
-
-            return AccentColors.TryGetValue(value.GetString() ?? "", out var css)
+            return AccentColors.TryGetValue(ReadSetting("AccentColor") ?? "", out var css)
                 ? css : DefaultAccent;
         }
         catch
@@ -49,6 +40,35 @@ internal static class MacDeskAppearance
             // 联动外观绝不能影响组件启动；遇到被占用/手改的设置文件时安静回退。
             return DefaultAccent;
         }
+    }
+
+    /// <summary>
+    /// MacDesk 在 settings.json 中持久化的小组件着色偏好。只在确认 MacDesk 可用时继承，
+    /// 且返回 null 让调用方保留显式 --style 或自身默认值。
+    /// </summary>
+    public static string? WidgetStyle()
+    {
+        if (Program.Opts.WithoutMacDesk || !IsInstalled()) return null;
+        try
+        {
+            string? value = ReadSetting("WidgetMonoMode");
+            return value is "auto" or "mono" or "full" ? value : null;
+        }
+        catch { return null; }
+    }
+
+    static string? ReadSetting(string property)
+    {
+        var settingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MacDesk", "settings.json");
+        if (!File.Exists(settingsPath)) return null;
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(settingsPath));
+        return doc.RootElement.TryGetProperty(property, out var value) &&
+               value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
     }
 
     static bool IsInstalled()
