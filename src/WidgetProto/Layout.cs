@@ -7,7 +7,8 @@ namespace WidgetProto;
 /// <summary>组件目录：kind → 支持的尺寸档与帧尺寸（s 180 / m 360×180 / l 360×360）。</summary>
 public static class WidgetRegistry
 {
-    public static readonly string[] Kinds = { "clock", "calendar", "monitor", "weather", "photo", "music", "battery" };
+    public static readonly string[] Kinds =
+        { "clock", "calendar", "timer", "note", "awake", "qr", "calculator", "links", "monitor", "weather", "photo", "music", "battery" };
 
     /// <summary>kind 支持的尺寸档（macOS 语义：组件自报支持档）。</summary>
     public static string[] SizesOf(string kind) => kind switch
@@ -16,18 +17,30 @@ public static class WidgetRegistry
         "calendar" => new[] { "s", "m" },   // m = 月历网格
         "monitor"  => new[] { "s", "m" },
         "music"    => new[] { "s", "m" },
+        "timer"      => new[] { "m" },
+        "note"       => new[] { "l" },
+        "awake"      => new[] { "m" },
+        "qr"         => new[] { "l" },
+        "calculator" => new[] { "l" },
+        "links"      => new[] { "m" },
         "weather"  => new[] { "m" },
         "photo"    => new[] { "l" },
         _          => new[] { "s" },
     };
 
     /// <summary>有"编辑小组件"配置脸的 kind（菜单据此显示入口）。</summary>
-    public static bool Configurable(string kind) => kind is "photo" or "weather";
+    public static bool Configurable(string kind) => kind is "photo" or "weather" or "links" or "note" or "qr";
 
     public static string DefaultSize(string kind) => kind switch
     {
         "weather" => "m",
         "music"   => "m",
+        "timer"      => "m",
+        "note"       => "l",
+        "awake"      => "m",
+        "qr"         => "l",
+        "calculator" => "l",
+        "links"      => "m",
         "photo"   => "l",
         _         => "s",
     };

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  :root { --tint:#EF6C5B; }
+  .content { padding:15px 17px; display:grid; grid-template-columns:minmax(0,1fr) 112px; gap:14px; }
+  .main { min-width:0; display:flex; flex-direction:column; }
+  .heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .heading b { color:var(--tint); font-size:12px; font-weight:700; letter-spacing:.25px; }
+  .status { color:var(--fg2); font-size:10.5px; }
+  .time { margin:4px 0 8px; color:var(--fg); font-size:43px; line-height:1; font-weight:560;
+    letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+  .presets { margin-top:auto; display:flex; gap:5px; }
+  button { border:0; color:var(--fg); background:var(--hairline); font:inherit; font-weight:650; cursor:pointer; }
+  button:hover { filter:brightness(1.12); } button:active { transform:scale(.96); }
+  .preset { flex:1; min-width:0; padding:6px 2px; border-radius:7px; font-size:10.5px; }
+  .preset.active { color:var(--tint); box-shadow:inset 0 0 0 1.2px var(--tint); }
+  .actions { display:grid; grid-template-rows:1fr 38px; gap:7px; }
+  #primary { border-radius:14px; background:var(--tint); color:#fff; font-size:16px; }
+  #reset { border-radius:10px; font-size:11.5px; color:var(--fg2); }
+  html.mono #primary { background:rgba(255,255,255,.24); }
+</style></head><body>
+<div class="card"><div class="content">
+  <div class="main">
+    <div class="heading"><b id="heading">专注计时器</b><span class="status" id="status">准备开始</span></div>
+    <div class="time" id="time" aria-live="polite">25:00</div>
+    <div class="presets" id="presets">
+      <button class="preset" data-min="5">5 分钟</button><button class="preset" data-min="15">15 分钟</button>
+      <button class="preset active" data-min="25">25 分钟</button><button class="preset" data-min="45">45 分钟</button>
+    </div>
+  </div>
+  <div class="actions"><button id="primary">开始</button><button id="reset">复位</button></div>
+</div></div>
+<script>
+  const MINUTE=60000, DEFAULT=25*MINUTE;
+  const english=(window.mw?.lang?.()||new URLSearchParams(location.search).get('lang'))==='en';
+  const words=english
+    ? {heading:'Focus Timer',ready:'Ready',running:'Running',paused:'Paused',done:'Complete',start:'Start',pause:'Pause',reset:'Reset',minute:'min'}
+    : {heading:'专注计时器',ready:'准备开始',running:'进行中',paused:'已暂停',done:'已完成',start:'开始',pause:'暂停',reset:'复位',minute:'分钟'};
+  const timeEl=document.getElementById('time'), statusEl=document.getElementById('status');
+  const primary=document.getElementById('primary'), presets=document.getElementById('presets');
+  document.getElementById('heading').textContent=words.heading;
+  document.getElementById('reset').textContent=words.reset;
+  presets.querySelectorAll('.preset').forEach(button=>button.textContent=`${button.dataset.min} ${words.minute}`);
+  const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
+  function load() {
+    const raw=window.mw?.cfg()||{};
+    const duration=clamp(Number(raw.durationMs)||DEFAULT,MINUTE,120*MINUTE);
+    const remaining=clamp(Number(raw.remainingMs ?? duration),0,duration);
+    const end=typeof raw.endUtc==='string' ? Date.parse(raw.endUtc) : NaN;
+    return {durationMs:duration,remainingMs:remaining,running:raw.running===true&&Number.isFinite(end),endUtc:Number.isFinite(end)?new Date(end).toISOString():null};
+  }
+  let state=load();
+  function remaining() { return state.running ? Math.max(0,Date.parse(state.endUtc)-Date.now()) : state.remainingMs; }
+  function persist() { window.mw?.saveCfg({...state}); }
+  function format(ms) {
+    const total=Math.max(0,Math.ceil(ms/1000)), minutes=Math.floor(total/60), seconds=total%60;
+    return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+  }
+  function paint() {
+    const left=remaining();
+    // The host owns persistence and the system notification. The page only
+    // corrects its live controls here so a resumed/suspended WebView never
+    // leaves a completed timer showing a misleading “Pause” button.
+    if(left<=0&&state.running) { state.running=false; state.endUtc=null; state.remainingMs=0; }
+    timeEl.textContent=format(left);
+    const done=left<=0;
+    statusEl.textContent=done?words.done:state.running?words.running:left<state.durationMs?words.paused:words.ready;
+    primary.textContent=state.running?words.pause:words.start;
+    presets.querySelectorAll('.preset').forEach(button=>button.classList.toggle('active',Number(button.dataset.min)*MINUTE===state.durationMs));
+  }
+  primary.addEventListener('click',()=>{
+    if(state.running) {
+      state.remainingMs=remaining(); state.running=false; state.endUtc=null;
+    } else {
+      if(state.remainingMs<=0) state.remainingMs=state.durationMs;
+      state.endUtc=new Date(Date.now()+state.remainingMs).toISOString(); state.running=true;
+    }
+    persist(); paint();
+  });
+  document.getElementById('reset').addEventListener('click',()=>{
+    state.running=false; state.endUtc=null; state.remainingMs=state.durationMs; persist(); paint();
+  });
+  presets.addEventListener('click',event=>{
+    const button=event.target.closest('.preset'); if(!button)return;
+    state.durationMs=Number(button.dataset.min)*MINUTE; state.remainingMs=state.durationMs;
+    state.running=false; state.endUtc=null; persist(); paint();
+  });
+  window.mw?.on('timerDone',()=>{ state.running=false; state.endUtc=null; state.remainingMs=0; paint(); });
+  paint(); setInterval(paint,250);
+</script></body></html>

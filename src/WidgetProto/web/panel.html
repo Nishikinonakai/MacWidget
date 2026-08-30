@@ -63,8 +63,10 @@
   .suggestion .detail { display:block; margin-top:2px; color:var(--fg2); font-size:10.5px; }
 
   .grid { display:flex; flex-wrap:wrap; gap:26px 30px; align-items:flex-start; }
-  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:grab; }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:grab; border:0;
+    background:transparent; color:inherit; font:inherit; border-radius:12px; padding:3px; }
   .cell.hide { display:none; }
+  .cell:focus-visible { outline:2px solid #5C8EF4; outline-offset:2px; }
   .prev { position:relative; border-radius:17px; transition:transform .15s ease; }
   .cell:hover .prev { transform:scale(1.03); }
   .cell:active { cursor:grabbing; }
@@ -91,6 +93,7 @@
       <nav class="nav" id="nav" aria-label="组件分类">
         <button class="navitem active" data-category="all" aria-pressed="true"><span class="symbol">▦</span><span class="nav-text">全部组件</span></button>
         <button class="navitem" data-category="schedule" aria-pressed="false"><span class="symbol">◷</span><span class="nav-text">日程</span></button>
+        <button class="navitem" data-category="tools" aria-pressed="false"><span class="symbol">⌘</span><span class="nav-text">工具</span></button>
         <button class="navitem" data-category="info" aria-pressed="false"><span class="symbol">◌</span><span class="nav-text">信息</span></button>
         <button class="navitem" data-category="media" aria-pressed="false"><span class="symbol">▶</span><span class="nav-text">媒体</span></button>
       </nav>
@@ -105,20 +108,26 @@
       <div class="empty" id="empty">没有符合条件的组件。</div>
     </section>
   </div>
-  <footer><div class="hint" id="footerHint">将组件拖到桌面上的任意位置来放置…</div><button id="done">完成</button></footer>
+  <footer><div class="hint" id="footerHint" aria-live="polite">单击自动添加，或拖到桌面上的任意位置…</div><button id="done">完成</button></footer>
 </div>
 <script>
   const WIDGETS = [
     { kind:'clock',    zh:'时钟', en:'Clock', category:'schedule', w:180, h:180, glyph:'◷', detailZh:'时间与世界时钟', detailEn:'Time and world clocks', accent:'#E96A66' },
     { kind:'calendar', zh:'日历', en:'Calendar', category:'schedule', w:180, h:180, glyph:'▦', detailZh:'日期与月历', detailEn:'Date and month view', accent:'#E96A66' },
+    { kind:'timer', zh:'专注计时器', en:'Focus Timer', category:'tools', w:360, h:180, glyph:'◴', detailZh:'倒计时与专注提醒', detailEn:'Countdown and focus reminder', accent:'#EF6C5B' },
+    { kind:'note', zh:'本地速记', en:'Local Note', category:'tools', w:360, h:360, glyph:'✎', detailZh:'一张只保存在本机的便签', detailEn:'A note stored only on this device', accent:'#E4B645' },
+    { kind:'awake', zh:'防休眠', en:'Keep Awake', category:'tools', w:360, h:180, glyph:'☕', detailZh:'定时阻止系统进入睡眠', detailEn:'Temporarily prevent system sleep', accent:'#55A86C' },
+    { kind:'qr', zh:'离线二维码', en:'Offline QR', category:'tools', w:360, h:360, glyph:'▦', detailZh:'把网址或文字传给手机', detailEn:'Send a URL or text to your phone', accent:'#6D72D9' },
+    { kind:'calculator', zh:'计算器', en:'Calculator', category:'tools', w:360, h:360, glyph:'±', detailZh:'Large 尺寸，适合完整键盘', detailEn:'Large size with a full keypad', accent:'#F0A33A' },
+    { kind:'links', zh:'快捷网址', en:'Quick Links', category:'tools', w:360, h:180, glyph:'↗', detailZh:'自己的常用网址面板', detailEn:'Your personal website launcher', accent:'#4A9EEA' },
     { kind:'monitor',  zh:'系统监视', en:'System Monitor', category:'info', w:180, h:180, glyph:'◌', detailZh:'CPU、内存与磁盘', detailEn:'CPU, memory, and disk', accent:'#5D93F7' },
     { kind:'battery',  zh:'电池', en:'Battery', category:'info', w:180, h:180, glyph:'▰', detailZh:'电量与充电状态', detailEn:'Battery and charging', accent:'#58A968' },
     { kind:'music',    zh:'正在播放', en:'Now Playing', category:'media', w:360, h:180, glyph:'♫', detailZh:'媒体播放控制', detailEn:'Media controls', accent:'#B47BE8' },
     { kind:'weather',  zh:'天气', en:'Weather', category:'info', w:360, h:180, glyph:'☀', detailZh:'当前天气与预报', detailEn:'Current conditions and forecast', accent:'#E99C34' },
     { kind:'photo',    zh:'照片', en:'Photos', category:'media', w:360, h:360, glyph:'▧', detailZh:'文件夹照片轮播', detailEn:'Photo-folder slideshow', accent:'#C1785E' },
   ];
-  const CATEGORY = { zh:{ all:'全部组件', schedule:'日程', info:'信息', media:'媒体' }, en:{ all:'All Widgets', schedule:'Schedule', info:'Information', media:'Media' } };
-  const SUGGESTION_ORDER = ['weather', 'calendar', 'photo', 'music'];
+  const CATEGORY = { zh:{ all:'全部组件', schedule:'日程', tools:'工具', info:'信息', media:'媒体' }, en:{ all:'All Widgets', schedule:'Schedule', tools:'Tools', info:'Information', media:'Media' } };
+  const SUGGESTION_ORDER = ['awake', 'qr', 'timer', 'note', 'calculator', 'links', 'weather', 'calendar', 'photo', 'music'];
   const SCALE = .78;
   const grid = document.getElementById('grid');
   const q = document.getElementById('q');
@@ -135,10 +144,10 @@
 
   function renderGrid() {
     grid.innerHTML = WIDGETS.map(w => `
-      <div class="cell pickable" role="listitem" data-kind="${w.kind}" data-category="${w.category}" data-name="${w.zh} ${w.en} ${w.kind}">
+      <div class="cell pickable" role="button" tabindex="0" data-kind="${w.kind}" data-category="${w.category}" data-name="${w.zh} ${w.en} ${w.kind}" aria-label="${lang === 'en' ? 'Add or drag ' : '单击添加或拖动'}${nameOf(w)}">
         <div class="prev" style="width:${w.w*SCALE}px;height:${w.h*SCALE}px">
           <iframe src="${w.kind}.html?lang=${lang}" width="${w.w}" height="${w.h}" style="transform:scale(${SCALE})"></iframe>
-        </div><div class="name">${nameOf(w)}</div>
+        </div><span class="name">${nameOf(w)}</span>
       </div>`).join('');
     document.querySelectorAll('iframe').forEach(f => f.addEventListener('load', tintFrames));
   }
@@ -162,6 +171,9 @@
       '星期日':'Sunday','星期一':'Monday','星期二':'Tuesday','星期三':'Wednesday','星期四':'Thursday','星期五':'Friday','星期六':'Saturday',
       '内存':'Memory','磁盘':'Disk','没有播放内容':'Nothing playing','无电池':'No battery','电池':'Battery',
       '照片':'Photos','右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder',
+      '快捷网址':'Quick Links','右键 → 编辑「快捷网址」来添加':'Right-click → Edit “Quick Links” to add sites',
+      '专注计时器':'Focus Timer','专注':'Focus','准备开始':'Ready','开始':'Start','暂停':'Pause','复位':'Reset','分钟':'min',
+      '本地速记':'Local Note','右键 → 编辑「本地速记」开始记录':'Right-click → Edit “Local Note” to start writing',
       '雷雨':'Thunderstorms','降雪':'Snow','有雨':'Rain','有雾':'Fog','多云':'Cloudy','晴朗':'Clear','晴':'Clear',
       '现在':'Now','最高':'High','最低':'Low'
     };
@@ -173,7 +185,7 @@
   function renderSuggestions() {
     const missing = SUGGESTION_ORDER.filter(kind => !installed.has(kind));
     const picks = (missing.length ? missing : SUGGESTION_ORDER).slice(0, 3).map(kind => WIDGETS.find(w => w.kind === kind));
-    suggestions.innerHTML = picks.map(w => `<button class="suggestion pickable" data-kind="${w.kind}" style="--accent:${w.accent}" aria-label="${lang === 'en' ? 'Drag ' : '拖出'}${nameOf(w)}">
+    suggestions.innerHTML = picks.map(w => `<button type="button" class="suggestion pickable" data-kind="${w.kind}" style="--accent:${w.accent}" aria-label="${lang === 'en' ? 'Add or drag ' : '单击添加或拖动'}${nameOf(w)}">
       <span class="glyph">${w.glyph}</span><span class="name">${nameOf(w)}</span><span class="detail">${detailOf(w)}</span>
     </button>`).join('');
   }
@@ -213,23 +225,45 @@
     document.getElementById('suggestionTitle').textContent = lang === 'en' ? 'Featured' : '精选推荐';
     document.getElementById('suggestionCount').textContent = lang === 'en' ? 'Based on your desktop' : '根据当前桌面';
     empty.textContent = lang === 'en' ? 'No matching widgets.' : '没有符合条件的组件。';
-    document.getElementById('footerHint').textContent = lang === 'en' ? 'Drag a widget anywhere on the desktop.' : '将组件拖到桌面上的任意位置来放置…';
+    document.getElementById('footerHint').textContent = lang === 'en' ? 'Click to add automatically, or drag anywhere on the desktop.' : '单击自动添加，或拖到桌面上的任意位置…';
     document.getElementById('done').textContent = lang === 'en' ? 'Done' : '完成';
     renderGrid(); renderSuggestions(); applyFilter(); tintFrames();
   }
 
   // 拖出放置：位移 >6px 即交棒宿主（宿主用真实光标循环接管，网页端不再跟踪）。
-  let pick = null, px = 0, py = 0;
+  let pick = null, px = 0, py = 0, suppressClick = false, hintTimer = 0;
   document.querySelector('section').addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     const cell = e.target.closest('.pickable'); if (!cell) return;
-    pick = cell.dataset.kind; px = e.screenX; py = e.screenY;
+    pick = cell.dataset.kind; px = e.screenX; py = e.screenY; suppressClick = false;
   });
   addEventListener('pointermove', e => {
     if (!pick) return;
-    if (Math.hypot(e.screenX - px, e.screenY - py) > 6) { post({ t:'pickup', kind:pick }); pick = null; }
+    if (Math.hypot(e.screenX - px, e.screenY - py) > 6) { suppressClick = true; post({ t:'pickup', kind:pick }); pick = null; }
   });
   addEventListener('pointerup', () => pick = null);
+  document.querySelector('section').addEventListener('click', e => {
+    const cell = e.target.closest('.pickable'); if (!cell) return;
+    if (suppressClick) { suppressClick = false; return; }
+    post({ t:'add', kind:cell.dataset.kind });
+  });
+  document.querySelector('section').addEventListener('keydown', e => {
+    const cell = e.target.closest('#grid .cell');
+    if (!cell || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    post({ t:'add', kind:cell.dataset.kind });
+  });
+
+  function showAdded(kind) {
+    const widget = WIDGETS.find(w => w.kind === kind);
+    if (!widget) return;
+    const hint = document.getElementById('footerHint');
+    hint.textContent = lang === 'en' ? `${nameOf(widget)} added to the desktop.` : `已将${nameOf(widget)}添加到桌面。`;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => hint.textContent = lang === 'en'
+      ? 'Click to add automatically, or drag anywhere on the desktop.'
+      : '单击自动添加，或拖到桌面上的任意位置…', 1800);
+  }
 
   window.chrome?.webview?.addEventListener('message', e => {
     const m = e.data || {};
@@ -244,6 +278,7 @@
     else if (m.t === 'hide') document.documentElement.classList.remove('show');
     else if (m.t === 'pickup') document.documentElement.classList.add('picking');
     else if (m.t === 'drop') document.documentElement.classList.remove('picking');
+    else if (m.t === 'added') showAdded(m.kind);
   });
   document.getElementById('done').addEventListener('click', () => post({ t:'done' }));
   addEventListener('keydown', e => { if (e.key === 'Escape') post({ t:'done' }); });

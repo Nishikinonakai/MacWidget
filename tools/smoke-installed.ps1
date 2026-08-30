@@ -41,14 +41,14 @@ if (-not (Test-Path -LiteralPath $AppPath -PathType Leaf)) {
 $resolvedAppPath = [System.IO.Path]::GetFullPath($AppPath)
 $appItem = Get-Item -LiteralPath $resolvedAppPath
 $appVersion = [string]$appItem.VersionInfo.ProductVersion
-$bundledRuntimeFiles = @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll')
+$bundledRuntimeFiles = @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll', 'QRCoder.dll')
 $missingRuntimeFiles = @($bundledRuntimeFiles | Where-Object {
     -not (Test-Path -LiteralPath (Join-Path $appItem.DirectoryName $_) -PathType Leaf)
 })
 if ($missingRuntimeFiles.Count -gt 0) {
     throw "Installed app is missing self-contained .NET runtime files: $($missingRuntimeFiles -join ', ')"
 }
-$requiredNoticeFiles = @('THIRD-PARTY-NOTICES.md', 'PRIVACY.md')
+$requiredNoticeFiles = @('THIRD-PARTY-NOTICES.md', 'PRIVACY.md', 'LICENSE')
 $missingNoticeFiles = @($requiredNoticeFiles | Where-Object {
     -not (Test-Path -LiteralPath (Join-Path $appItem.DirectoryName $_) -PathType Leaf)
 })

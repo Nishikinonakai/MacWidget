@@ -1,15 +1,18 @@
 # MacWidget
 
-MacWidget 是 Windows 桌面小组件应用：把时钟、日历、天气、系统状态、正在播放、照片和电池状态
+MacWidget 是 Windows 桌面小组件应用：把时钟、日历、专注计时器、本地速记、防休眠、离线二维码、计算器、快捷网址、天气、系统状态、正在播放、照片和电池状态
 放在桌面上，自由摆放并随桌面状态自动调整外观。它是原生 C# / WPF 宿主，组件界面使用 WebView2
 渲染；不依赖 Electron，也不需要账号。
 
-当前处于可安装的 Beta 收口阶段。发布准备状态见
-[Steam 上架清单](docs/store/steam-checklist.zh.md)。
+安装包通过 [GitHub Releases](https://github.com/Nishikinonakai/MacWidget/releases) 发布。
 
 ## 功能
 
-- **七种组件**：时钟、日历、天气、系统监视、正在播放、照片轮播、电池。
+- **十三种组件**：时钟、日历、专注计时器、本地速记、防休眠、离线二维码、计算器、快捷网址、天气、系统监视、正在播放、照片轮播、电池。
+- **原创桌面工具**：Medium 专注计时器即使被窗口遮住也会准时通知；Large 速记与计算器无需独立应用；
+  快捷网址面板完全本地保存，可配置六个 HTTP(S) 入口。
+- **本地系统工具**：防休眠可定时阻止 Windows 睡眠，并可选择保持屏幕点亮；离线二维码在本机把网址或
+  文字转换成可供手机扫描的图像，不经过网络服务。
 - **桌面级交互**：右键组件可改尺寸、配置或移除；进入“编辑小组件”后可从组件库拖出新组件。
 - **真实数据**：系统状态、媒体会话和电池在本机读取；天气直接请求 MET Norway 的公开服务。
 - **自动外观**：跟随系统明暗主题；普通窗口覆盖当前显示器时，组件自动变为低调单色。
@@ -27,7 +30,10 @@ MacWidget 是 Windows 桌面小组件应用：把时钟、日历、天气、系�
 2. 安装器会检测 Microsoft Edge WebView2 Runtime；缺失时自动运行微软 Evergreen Bootstrapper。
    首次补装 Runtime 时需要联网，已安装 Runtime 的电脑不会重复下载。
 3. 从开始菜单启动 MacWidget；单击或右击通知区图标可打开浮层，其中的“隐私与数据”会打开随应用安装的本地说明。
-4. 选择“编辑小组件…”即可打开组件库，拖动卡片到桌面完成添加。
+4. 选择“编辑小组件…”即可打开组件库；单击卡片会自动放到空位，也可以拖到桌面的指定位置。
+
+托盘菜单中的“检查更新…”会在用户主动选择后读取 GitHub 最新 Release。发现新版本时，单击通知可打开
+Release 下载页；应用不会后台下载或静默安装更新。每个安装器旁都提供 SHA-256 文件和本地验证脚本。
 
 WebView2 Runtime 会由 Microsoft 独立更新。MacWidget 检测到新版运行时时只显示托盘提示，不会打断当前
 桌面；可在托盘浮层选择“重新启动 MacWidget”以安全交接并应用更新。
@@ -73,7 +79,7 @@ MacDesk 与 MacWidget 可以独立安装。两者都在运行时，MacWidget 会
 
 - [TESTPLAN.md](TESTPLAN.md) — 测试机操作和实验方法。
 - [RESULTS.md](RESULTS.md) — 早期技术验证结果。
-- [docs/store/](docs/store/) — 商店文案、定价和发布清单。
+- [GitHub Releases](https://github.com/Nishikinonakai/MacWidget/releases) — 安装器、SHA-256 与版本说明。
 
 ## 已安装版验收
 
@@ -96,3 +102,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\smoke-installed.ps1 `
 
 开发/实验命令行参数仍保留在 `Options.cs`，不建议普通用户使用；MacDesk 拉起组件库使用
 `MacWidget.exe --edit-widgets`。
+
+## 许可证
+
+MacWidget 以 [GNU General Public License v3.0](LICENSE) 开源。分发原版或修改版时，必须遵守 GPL-3.0
+关于源代码、许可证声明和相同许可证再分发的要求。

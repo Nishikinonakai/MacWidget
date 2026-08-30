@@ -27,7 +27,10 @@ public sealed class PanelWindow : Window
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = false;
-        ShowInTaskbar = false;
+        // Product mode stays out of the taskbar. Lab mode deliberately exposes
+        // the gallery as a targetable window so desktop interaction checks can
+        // exercise the real WebView2 UI instead of relying on log-only smoke tests.
+        ShowInTaskbar = Program.Opts.LabMode;
         ShowActivated = true;      // 搜索框要键盘
         Topmost = true;
         Background = Brushes.Transparent;
@@ -40,7 +43,7 @@ public sealed class PanelWindow : Window
             src.CompositionTarget.BackgroundColor = Colors.Transparent;
             var h = src.Handle;
             var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
-            ex |= Native.WS_EX_TOOLWINDOW;
+            if (!Program.Opts.LabMode) ex |= Native.WS_EX_TOOLWINDOW;
             Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
             Dwm.ExtendIntoClient(h);
             Dwm.SetDark(h, ColorMode.Dark);
@@ -185,12 +188,38 @@ public sealed class PanelWindow : Window
             {
                 case "done": EditMode.Exit(); break;
                 case "pickup": StartPickup(root.GetProperty("kind").GetString() ?? ""); break;
+                case "add": AddAutomatically(root.GetProperty("kind").GetString() ?? ""); break;
             }
         }
         catch (Exception ex) { Program.Log("panel webmsg FAIL: " + ex.Message); }
     }
 
     // ---- 拖出放置：宿主光标循环 ----
+
+    void AddAutomatically(string kind)
+    {
+        if (!WidgetRegistry.Kinds.Contains(kind)) return;
+        var display = DisplayTopology.ForRect(_shownRect);
+        var sizeClass = WidgetRegistry.DefaultSize(kind);
+        var (width, height) = WidgetRegistry.Size(kind, sizeClass);
+        var physicalSize = new Size(width * display.Scale, height * display.Scale);
+        var occupied = Application.Current.Windows.OfType<WidgetWindow>()
+            .Where(window => window.IsVisible)
+            .Select(window => window.PhysicalBounds)
+            .Where(bounds => !bounds.IsEmpty && DisplayTopology.ForRect(bounds).Handle == display.Handle)
+            .ToList();
+        var point = Placement.FindAutomaticPosition(physicalSize, occupied, display.Work,
+            Placement.Unit * display.Scale, Placement.EdgeMargin * display.Scale);
+        var position = new DisplayTopology.Position(display.Key,
+            point.X - display.Physical.Left, point.Y - display.Physical.Top);
+        var widget = new WidgetWindow(Program.NextId(), kind, sizeClass, position);
+        widget.Show();
+        WidgetLink.Send(force: true);
+        Layout.Save();
+        PushState();
+        Post(System.Text.Json.JsonSerializer.Serialize(new { t = "added", kind }));
+        Program.Log($"panel add {kind} at ({point.X:f0},{point.Y:f0})px");
+    }
 
     WidgetWindow? _pick;
     EventHandler? _pickFrame;

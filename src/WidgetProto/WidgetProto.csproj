@@ -14,11 +14,12 @@
     <RootNamespace>WidgetProto</RootNamespace>
     <ApplicationIcon>Assets\MacWidget.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.2.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +33,7 @@
     <None Include="web\**" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

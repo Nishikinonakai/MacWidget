@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  :root { --tint:#55A86C; }
+  .content { padding:14px 17px; display:grid; grid-template-columns:minmax(0,1fr) 116px; gap:13px; }
+  .main { min-width:0; display:flex; flex-direction:column; }
+  .heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .heading b { color:var(--tint); font-size:12px; font-weight:700; }
+  .status { color:var(--fg2); font-size:10.5px; }
+  .remaining { margin:5px 0 8px; color:var(--fg); font-size:38px; line-height:1; font-weight:570;
+    letter-spacing:-.8px; font-variant-numeric:tabular-nums; }
+  .presets { margin-top:auto; display:flex; gap:5px; }
+  button { border:0; color:var(--fg); background:var(--hairline); font:inherit; font-weight:650; cursor:pointer; }
+  button:hover { filter:brightness(1.12); } button:active { transform:scale(.96); }
+  .preset { flex:1; min-width:0; padding:6px 2px; border-radius:7px; font-size:10.5px; }
+  .preset.active { color:var(--tint); box-shadow:inset 0 0 0 1.2px var(--tint); }
+  .actions { display:grid; grid-template-rows:1fr 39px; gap:7px; }
+  #primary { border-radius:14px; background:var(--tint); color:#fff; font-size:14px; }
+  #display { border-radius:10px; color:var(--fg2); font-size:10.5px; padding:2px 7px; }
+  #display[aria-pressed="true"] { color:var(--tint); box-shadow:inset 0 0 0 1px var(--tint); }
+  html.mono #primary { background:rgba(255,255,255,.24); }
+</style></head><body>
+<div class="card"><div class="content">
+  <div class="main">
+    <div class="heading"><b id="heading">防休眠</b><span class="status" id="status">允许正常休眠</span></div>
+    <div class="remaining" id="remaining" aria-live="polite">60:00</div>
+    <div class="presets" id="presets">
+      <button class="preset" data-min="30">30m</button><button class="preset active" data-min="60">1h</button>
+      <button class="preset" data-min="120">2h</button><button class="preset" data-min="0">∞</button>
+    </div>
+  </div>
+  <div class="actions"><button id="primary">开始保持</button><button id="display" aria-pressed="false">屏幕可关闭</button></div>
+</div></div>
+<script>
+  const english=(window.mw?.lang?.()||new URLSearchParams(location.search).get('lang'))==='en';
+  const words=english
+    ? {heading:'Keep Awake',idle:'Normal sleep',active:'Keeping awake',start:'Keep awake',stop:'Stop',screenOff:'Display may turn off',screenOn:'Keep display on'}
+    : {heading:'防休眠',idle:'允许正常休眠',active:'保持唤醒中',start:'开始保持',stop:'停止',screenOff:'屏幕可关闭',screenOn:'屏幕保持亮'};
+  const MINUTE=60000, allowed=[30,60,120,0];
+  const remainingEl=document.getElementById('remaining'), statusEl=document.getElementById('status');
+  const primary=document.getElementById('primary'), display=document.getElementById('display'), presets=document.getElementById('presets');
+  document.getElementById('heading').textContent=words.heading;
+  function load() {
+    const raw=window.mw?.cfg()||{}; const duration=allowed.includes(Number(raw.durationMinutes))?Number(raw.durationMinutes):60;
+    const end=typeof raw.endUtc==='string'?Date.parse(raw.endUtc):NaN;
+    return {durationMinutes:duration,active:raw.active===true&&(duration===0||Number.isFinite(end)),endUtc:Number.isFinite(end)?new Date(end).toISOString():null,keepDisplay:raw.keepDisplay===true};
+  }
+  let state=load();
+  function left() { return state.active&&state.durationMinutes>0?Math.max(0,Date.parse(state.endUtc)-Date.now()):state.durationMinutes===0?Infinity:state.durationMinutes*MINUTE; }
+  function format(ms) {
+    if(ms===Infinity)return '∞'; const total=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(total/3600),m=Math.floor(total%3600/60),s=total%60;
+    return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  function save(){window.mw?.saveCfg({...state});}
+  function paint(){
+    const rem=left(); if(state.active&&rem<=0){state.active=false;state.endUtc=null;}
+    remainingEl.textContent=format(rem); statusEl.textContent=state.active?words.active:words.idle;
+    primary.textContent=state.active?words.stop:words.start;
+    display.textContent=state.keepDisplay?words.screenOn:words.screenOff; display.setAttribute('aria-pressed',String(state.keepDisplay));
+    presets.querySelectorAll('.preset').forEach(button=>button.classList.toggle('active',Number(button.dataset.min)===state.durationMinutes));
+  }
+  primary.addEventListener('click',()=>{
+    state.active=!state.active; state.endUtc=state.active&&state.durationMinutes>0?new Date(Date.now()+state.durationMinutes*MINUTE).toISOString():null;
+    save(); paint();
+  });
+  display.addEventListener('click',()=>{state.keepDisplay=!state.keepDisplay;save();paint();});
+  presets.addEventListener('click',event=>{
+    const button=event.target.closest('.preset'); if(!button)return; state.durationMinutes=Number(button.dataset.min);
+    state.endUtc=state.active&&state.durationMinutes>0?new Date(Date.now()+state.durationMinutes*MINUTE).toISOString():null; save();paint();
+  });
+  window.mw?.on('awakeExpired',()=>{state.active=false;state.endUtc=null;paint();});
+  paint(); setInterval(paint,500);
+</script></body></html>

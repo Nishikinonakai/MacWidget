@@ -1,5 +1,5 @@
 ; MacWidget 单用户安装器（Inno Setup 6）。
-; 构建：ISCC /DMyAppVersion=0.2.0 /DSourceDir=<publish> installer\macwidget.iss
+; 构建：ISCC /DMyAppVersion=0.4.0 /DSourceDir=<publish> installer\macwidget.iss
 ; 设计：不需要管理员权限；升级/卸载先 --quit，用户数据 %LOCALAPPDATA%\MacWidget 永不删除。
 
 #ifndef MyAppVersion

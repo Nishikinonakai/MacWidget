@@ -13,16 +13,22 @@
   // pages consistent. It also observes dynamic data labels, so providers do
   // not need to duplicate localization plumbing for every update.
   const enText = {
-    '搜索组件':'Search widgets','浏览':'Browse','组件分类':'Widget categories','全部组件':'All Widgets','日程':'Schedule','信息':'Information','媒体':'Media',
+    '搜索组件':'Search widgets','浏览':'Browse','组件分类':'Widget categories','全部组件':'All Widgets','日程':'Schedule','工具':'Tools','信息':'Information','媒体':'Media',
     '精选推荐':'Featured','根据当前桌面':'Based on your desktop','没有符合条件的组件。':'No matching widgets.','将组件拖到桌面上的任意位置来放置…':'Drag a widget anywhere on the desktop.','完成':'Done',
     '时钟':'Clock','时间与世界时钟':'Time and world clocks','日历':'Calendar','日期与月历':'Date and month view','系统监视':'System Monitor','CPU、内存与磁盘':'CPU, memory, and disk',
+    '专注计时器':'Focus Timer','倒计时与专注提醒':'Countdown and focus reminder','本地速记':'Local Note','一张只保存在本机的便签':'A note stored only on this device',
+    '防休眠':'Keep Awake','定时阻止系统进入睡眠':'Temporarily prevent system sleep','离线二维码':'Offline QR','把网址或文字传给手机':'Send a URL or text to your phone',
+    '计算器':'Calculator','随手计算，不离开桌面':'Quick calculations on your desktop','快捷网址':'Quick Links','自己的常用网址面板':'Your personal website launcher',
     '电池':'Battery','电量与充电状态':'Battery and charging','正在播放':'Now Playing','媒体播放控制':'Media controls','天气':'Weather','当前天气与预报':'Current conditions and forecast','照片':'Photos','文件夹照片轮播':'Photo-folder slideshow',
     '搜索结果：':'Search results: ','个组件':' widgets','加载中':'Loading','天气地点':'Weather location','输入城市或地区':'Enter a city or region','搜索':'Search','搜索：Open-Meteo · 天气：MET Norway':'Search: Open-Meteo · Weather: MET Norway',
     '星期日':'Sunday','星期一':'Monday','星期二':'Tuesday','星期三':'Wednesday','星期四':'Thursday','星期五':'Friday','星期六':'Saturday',
     '杭州':'Hangzhou','东京':'Tokyo','伦敦':'London','纽约':'New York',
     '暂时无法获取天气':'Weather is temporarily unavailable','请输入至少两个字符':'Enter at least two characters','正在搜索…':'Searching…','搜索服务暂不可用':'Search is unavailable','未找到地点':'No locations found',
     '右键 → 编辑「照片」选择文件夹':'Right-click → Edit “Photos” to choose a folder','文件夹':'Folder','（图片）':'(Pictures)','选择…':'Choose…','轮换间隔':'Rotation interval','秒':' sec',
-    '没有播放内容':'Nothing playing','未知曲目':'Unknown track','内存':'Memory','磁盘':'Disk','无电池':'No battery','充电中':'Charging','已充满':'Fully charged','剩余 ':'Remaining '
+    '没有播放内容':'Nothing playing','未知曲目':'Unknown track','内存':'Memory','磁盘':'Disk','无电池':'No battery','充电中':'Charging','已充满':'Fully charged','剩余 ':'Remaining ',
+    '右键 → 编辑「快捷网址」来添加':'Right-click → Edit “Quick Links” to add sites','名称':'Name','网址':'URL','例如：文档':'e.g. Docs','例如：example.com':'e.g. example.com','清除':'Clear',
+    '专注':'Focus','准备开始':'Ready','进行中':'Running','已暂停':'Paused','已完成':'Complete','开始':'Start','暂停':'Pause','复位':'Reset','分钟':'min',
+    '右键 → 编辑「本地速记」开始记录':'Right-click → Edit “Local Note” to start writing','标题（可选）':'Title (optional)','在这里写点什么…':'Write something…','内容只保存在这台电脑上':'Stored only on this device'
   };
   const enPairs = Object.entries(enText).sort((a, b) => b[0].length - a[0].length);
   function localize(root) {
@@ -30,10 +36,14 @@
     const translate = s => enPairs.reduce((v, [zh, en]) => v.split(zh).join(en), s);
     const walk = node => {
       if (node.nodeType === Node.TEXT_NODE) {
+        if (node.parentElement?.closest('[data-mw-no-localize]')) return;
         const next = translate(node.nodeValue);
         if (next !== node.nodeValue) node.nodeValue = next;
       }
       else if (node.nodeType === Node.ELEMENT_NODE) {
+        // Widget-authored UI is localized, user-authored note/link text is not.
+        // Never rewrite content or accessible labels below this boundary.
+        if (node.hasAttribute('data-mw-no-localize')) return;
         for (const a of ['placeholder', 'aria-label', 'title']) if (node.hasAttribute(a)) node.setAttribute(a, translate(node.getAttribute(a)));
         node.childNodes.forEach(walk);
       }
@@ -62,6 +72,8 @@
     cfg() { return cfg; },                             // 当前实例配置（宿主持久化在布局文件）
     lang() { return (window.__mwInit && window.__mwInit.lang) || 'zh'; },
     saveCfg(c) { cfg = c; post({ t: 'cfg', cfg: c }); },
+    openUrl(url) { post({ t: 'openUrl', url: String(url || '') }); },
+    makeQr(text) { post({ t: 'qr', text: String(text || '') }); },
     pickFolder(fn) { pickQ.push(fn); post({ t: 'pickfolder' }); },   // 原生选文件夹，fn(path|null)
     exitCfg() {
       try { document.documentElement.classList.remove('cfgmode'); } catch { }

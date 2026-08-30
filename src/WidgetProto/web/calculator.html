@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="widget.css">
+<style>
+  :root { --tint:#FF9F0A; }
+  .content { padding:16px 18px 18px; display:grid; grid-template-rows:64px 1fr; gap:10px; }
+  .display { min-width:0; display:flex; align-items:flex-end; justify-content:flex-end; gap:9px;
+    padding:0 5px; font-variant-numeric:tabular-nums; }
+  .expression { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    color:var(--fg2); font-size:13px; text-align:right; padding-bottom:6px; }
+  .value { color:var(--fg); font-size:42px; line-height:1; font-weight:520; max-width:240px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .keys { display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(5,1fr); gap:8px; }
+  button { border:0; border-radius:12px; background:var(--hairline); color:var(--fg); font:inherit;
+    font-size:19px; font-weight:580; cursor:pointer; min-width:0; }
+  button:hover { filter:brightness(1.12); }
+  button:active { transform:scale(.96); filter:brightness(.90); }
+  button.op { color:var(--tint); font-size:24px; }
+  button.eq { background:var(--tint); color:#fff; }
+  button.zero { grid-column:span 2; }
+  html.mono button.eq { background:rgba(255,255,255,.24); }
+</style></head><body>
+<div class="card"><div class="content">
+  <div class="display"><div class="expression" id="expression"></div><div class="value" id="value">0</div></div>
+  <div class="keys" id="keys">
+    <button data-key="clear">AC</button><button data-key="sign">±</button><button data-key="percent">%</button><button class="op" data-key="/">÷</button>
+    <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button class="op" data-key="*">×</button>
+    <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button class="op" data-key="-">−</button>
+    <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button class="op" data-key="+">+</button>
+    <button class="zero" data-key="0">0</button><button data-key=".">.</button><button class="eq" data-key="=">=</button>
+  </div>
+</div></div>
+<script>
+  const valueEl = document.getElementById('value');
+  const expressionEl = document.getElementById('expression');
+  let entry = '0', stored = null, op = null, replace = true, expression = '';
+  const symbol = value => ({'/':'÷','*':'×','-':'−','+':'+'}[value] || value);
+  function number() { return Number(entry); }
+  function format(value) {
+    if (!Number.isFinite(value)) return 'Error';
+    const abs = Math.abs(value);
+    if ((abs >= 1e11) || (abs > 0 && abs < 1e-7)) return value.toExponential(7).replace(/\.0+e/,'e');
+    return Number(value.toPrecision(11)).toString();
+  }
+  function paint() { valueEl.textContent = entry; expressionEl.textContent = expression; }
+  function reset() { entry='0'; stored=null; op=null; replace=true; expression=''; paint(); }
+  function calculate(left, right, operator) {
+    if (operator === '+') return left + right;
+    if (operator === '-') return left - right;
+    if (operator === '*') return left * right;
+    if (operator === '/') return right === 0 ? NaN : left / right;
+    return right;
+  }
+  function resolve() {
+    if (op == null || stored == null) return number();
+    const result = calculate(stored, number(), op);
+    entry = format(result);
+    stored = Number.isFinite(result) ? result : null;
+    return result;
+  }
+  function press(key) {
+    if (/^\d$/.test(key)) {
+      if (entry === 'Error' || replace) { entry = key; replace = false; }
+      else if (entry.replace('-','').replace('.','').length < 11) entry += key;
+    } else if (key === '.') {
+      if (entry === 'Error' || replace) { entry='0.'; replace=false; }
+      else if (!entry.includes('.')) entry += '.';
+    } else if (key === 'clear') reset();
+    else if (key === 'sign' && entry !== 'Error' && entry !== '0') entry = entry.startsWith('-') ? entry.slice(1) : '-' + entry;
+    else if (key === 'percent' && entry !== 'Error') { entry = format(number()/100); replace=true; }
+    else if (['+','-','*','/'].includes(key)) {
+      if (entry === 'Error') return reset();
+      if (op != null && !replace && !Number.isFinite(resolve())) return paint();
+      stored = number(); op = key; replace = true; expression = `${format(stored)} ${symbol(op)}`;
+    } else if (key === '=' && op != null && stored != null && entry !== 'Error') {
+      const right = number(), left = stored, active = op;
+      const result = resolve(); expression = `${format(left)} ${symbol(active)} ${format(right)} =`;
+      op = null; stored = null; replace = true;
+      if (!Number.isFinite(result)) entry = 'Error';
+    }
+    paint();
+  }
+  document.getElementById('keys').addEventListener('click', event => {
+    const button = event.target.closest('button'); if (button) press(button.dataset.key);
+  });
+  addEventListener('keydown', event => {
+    const mapped = event.key === 'Enter' ? '=' : event.key === 'Escape' ? 'clear' : event.key;
+    if (/^\d$/.test(mapped) || ['.','+','-','*','/','=','clear'].includes(mapped)) { event.preventDefault(); press(mapped); }
+  });
+</script></body></html>

@@ -24,6 +24,7 @@ public sealed class WidgetWindow : Window
     bool _configurationMode;
     bool _allowActivation;
     long _lastBackdropPost;
+    System.Threading.Timer? _focusTimer;
 
     public string Kind { get; }
     public string SizeClass { get; private set; }
@@ -48,7 +49,9 @@ public sealed class WidgetWindow : Window
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = false;   // 铁律：layered 与 WPF D3D/DWM backdrop 互斥（macdesk-pitfalls）
-        ShowInTaskbar = false;
+        // Lab windows are discoverable by desktop UI automation; product
+        // widgets remain taskbar-free desktop surfaces.
+        ShowInTaskbar = Program.Opts.LabMode;
         ShowActivated = !Program.Opts.NoActivate;
         Background = Brushes.Transparent;
         Title = $"MacWidget {i} {kind}";
@@ -74,6 +77,9 @@ public sealed class WidgetWindow : Window
         Loaded += OnLoaded;
         Closed += (_, _) =>
         {
+            _focusTimer?.Dispose();
+            _focusTimer = null;
+            KeepAwakeManager.Remove(this);
             DataHub.Drop(this);             // 订阅随窗口生命周期，最后一个走人即停采样
             if (!_removing) return;
             WidgetLink.Send(force: true);   // 管道对面即时回位
@@ -90,7 +96,7 @@ public sealed class WidgetWindow : Window
 
         var h = src.Handle;
         var ex = Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE).ToInt64();
-        ex |= Native.WS_EX_TOOLWINDOW;
+        if (!Program.Opts.LabMode) ex |= Native.WS_EX_TOOLWINDOW;
         if (Program.Opts.NoActivate) ex |= Native.WS_EX_NOACTIVATE;
         Native.SetWindowLongPtr(h, Native.GWL_EXSTYLE, new IntPtr(ex));
 
@@ -124,6 +130,8 @@ public sealed class WidgetWindow : Window
 
     async void OnLoaded(object? s, RoutedEventArgs e)
     {
+        RescheduleFocusTimer();
+        if (Kind == "awake") KeepAwakeManager.Restore(this, Cfg);
         try
         {
             if (Program.Opts.Control == "native")
@@ -247,6 +255,78 @@ public sealed class WidgetWindow : Window
                 new { t = "state", dark, mono, effects, editing = EditMode.On }));
         }
         catch (Exception ex) { Program.Log($"widget {_i} poststate FAIL: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Focus timers are scheduled by the native host, not by setInterval in the
+    /// page. Covered widgets intentionally suspend WebView2, but a timer must
+    /// still finish and notify at the requested wall-clock time.
+    /// </summary>
+    void RescheduleFocusTimer()
+    {
+        _focusTimer?.Dispose();
+        _focusTimer = null;
+        if (Kind != "timer" || _removing || Cfg is not { ValueKind: System.Text.Json.JsonValueKind.Object } cfg ||
+            !cfg.TryGetProperty("running", out var running) || running.ValueKind != System.Text.Json.JsonValueKind.True ||
+            !cfg.TryGetProperty("endUtc", out var endNode) || endNode.GetString() is not { Length: > 0 } endText ||
+            !DateTimeOffset.TryParse(endText, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var due)) return;
+
+        var remaining = due.ToUniversalTime() - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            CompleteFocusTimer();
+            return;
+        }
+
+        // System.Threading.Timer has a finite native due-time range. Long or
+        // malformed future dates are rechecked periodically instead of wrapping.
+        var wait = remaining > TimeSpan.FromHours(12) ? TimeSpan.FromHours(12) : remaining;
+        _focusTimer = new System.Threading.Timer(_ =>
+        {
+            try { _ = Dispatcher.BeginInvoke(RescheduleFocusTimer); } catch { }
+        }, null, wait, System.Threading.Timeout.InfiniteTimeSpan);
+        Program.Log($"widget {_i} (timer) scheduled in {remaining.TotalSeconds:f1}s");
+    }
+
+    void CompleteFocusTimer()
+    {
+        if (Kind != "timer" || _removing || Cfg is not { ValueKind: System.Text.Json.JsonValueKind.Object } cfg ||
+            !cfg.TryGetProperty("running", out var running) || running.ValueKind != System.Text.Json.JsonValueKind.True) return;
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(cfg.GetRawText())?.AsObject();
+            if (node == null) return;
+            node["running"] = false;
+            node["remainingMs"] = 0;
+            node["endUtc"] = null;
+            Cfg = System.Text.Json.JsonSerializer.SerializeToElement(node);
+            Layout.Save();
+            _ = RefreshInitScript();
+            PostJson("""{"t":"timerDone"}""");
+            Tray.ShowTimerFinished();
+            Program.Log($"widget {_i} (timer) completed");
+        }
+        catch (Exception ex) { Program.Log($"widget {_i} timer completion FAIL: {ex.Message}"); }
+    }
+
+    internal void MarkKeepAwakeExpired()
+    {
+        if (Kind != "awake" || Cfg is not { ValueKind: System.Text.Json.JsonValueKind.Object } cfg ||
+            !cfg.TryGetProperty("active", out var active) || active.ValueKind != System.Text.Json.JsonValueKind.True) return;
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(cfg.GetRawText())?.AsObject();
+            if (node == null) return;
+            node["active"] = false;
+            node["endUtc"] = null;
+            Cfg = System.Text.Json.JsonSerializer.SerializeToElement(node);
+            Layout.Save();
+            _ = RefreshInitScript();
+            PostJson("""{"t":"awakeExpired"}""");
+            Program.Log($"widget {_i} (awake) request expired");
+        }
+        catch (Exception ex) { Program.Log($"widget {_i} keep-awake expiry FAIL: {ex.Message}"); }
     }
 
     void PushBackdropAlignment(bool force = false, Rect? knownBounds = null)
@@ -413,10 +493,26 @@ public sealed class WidgetWindow : Window
                     Layout.Save();
                     Program.Log($"widget {_i} ({Kind}) cfg saved");
                     if (Kind == "photo" && _core != null) PhotoSupport.Apply(this, _core, _i);
-                    _ = RefreshInitScript();   // 注入快照跟上新 cfg（否则下次导航读到陈旧 cfg——真机踩过）
+                    if (Kind == "timer") RescheduleFocusTimer();
+                    if (Kind == "awake") KeepAwakeManager.Update(this, Cfg);
+                    // Notes autosave on every keystroke. Re-registering the
+                    // document-created script for every character is wasteful;
+                    // the current page already owns the live value, and cfgdone
+                    // refreshes the navigation snapshot once editing finishes.
+                    if (Kind != "note") _ = RefreshInitScript();
                     break;
                 case "cfgdone":
+                    if (Kind == "note") _ = RefreshInitScript();
                     EndConfiguration();
+                    break;
+                case "openUrl":
+                    if (Kind == "links")
+                        ExternalLaunch.OpenHttp(root.TryGetProperty("url", out var url) ? url.GetString() : null,
+                            "quick links widget");
+                    break;
+                case "qr":
+                    if (Kind == "qr")
+                        QrSupport.Render(this, root.TryGetProperty("text", out var qrText) ? qrText.GetString() : null);
                     break;
                 case "placeSearch":
                     if (Kind != "weather") break;

@@ -19,6 +19,53 @@ public static class Placement
 
     public readonly record struct Result(double L, double T, bool Corrected);
 
+    /// <summary>
+    /// 组件库的单击/键盘添加没有鼠标落点：从工作区左上开始按组件单元扫描，
+    /// 返回第一个不越界且不与现有组件相交的位置。桌面已经很满时退化为
+    /// “遮挡面积最小”的候选，至少保证新组件完整可见、之后仍可手动拖开。
+    /// </summary>
+    public static Point FindAutomaticPosition(Size size, IReadOnlyList<Rect> others, Rect work,
+                                              double unit, double edgeMargin)
+    {
+        var safe = new Rect(work.X + edgeMargin, work.Y + edgeMargin,
+            Math.Max(0, work.Width - edgeMargin * 2), Math.Max(0, work.Height - edgeMargin * 2));
+        double maxX = Math.Max(safe.Left, safe.Right - size.Width);
+        double maxY = Math.Max(safe.Top, safe.Bottom - size.Height);
+        var xs = Axis(safe.Left, maxX, unit);
+        var ys = Axis(safe.Top, maxY, unit);
+
+        Point best = new(safe.Left, safe.Top);
+        double bestOverlap = double.MaxValue;
+        foreach (double y in ys)
+            foreach (double x in xs)
+            {
+                var candidate = new Rect(x, y, size.Width, size.Height);
+                double overlap = 0;
+                foreach (var other in others)
+                {
+                    var intersection = Rect.Intersect(candidate, Shrink(other, 0.5));
+                    if (!intersection.IsEmpty) overlap += intersection.Width * intersection.Height;
+                }
+                if (overlap <= 0) return new Point(x, y);
+                if (overlap < bestOverlap)
+                {
+                    bestOverlap = overlap;
+                    best = new Point(x, y);
+                }
+            }
+        return best;
+    }
+
+    static List<double> Axis(double start, double end, double step)
+    {
+        var values = new List<double> { start };
+        if (step > 0)
+            for (double value = start + step; value < end - 0.5; value += step)
+                values.Add(value);
+        if (end > start + 0.5) values.Add(end);
+        return values;
+    }
+
     /// <param name="unit">当前显示器上一个 180pt 单元对应的物理 px。</param>
     /// <param name="edgeMargin">当前显示器上 16pt 安全边对应的物理 px。</param>
     public static Result Resolve(Rect self, IReadOnlyList<Rect> others, Rect work,

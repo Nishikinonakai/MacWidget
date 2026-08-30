@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Windows;
+using QRCoder;
 using WidgetProto;
 
 static DisplayTopology.Display Display(string key, int handle, double width, double height,
@@ -100,4 +101,79 @@ var reattached = AdaptiveLayout.AdaptSerialized(V4(new[] { compactTarget }, fold
 Require(reattached.All(entry => entry.Display == compactTarget.Key),
     "reattaching a display resurrected an obsolete multi-display placement");
 
-Console.WriteLine("Layout scenarios passed: v3 latest, same-resolution replacement, compaction, no resurrection.");
+var automaticWork = new Rect(0, 0, 1280, 680);
+var automaticOccupied = new List<Rect>
+{
+    new(16, 16, 180, 180),
+    new(196, 16, 360, 180),
+};
+var automatic = Placement.FindAutomaticPosition(new Size(360, 360), automaticOccupied,
+    automaticWork, Placement.Unit, Placement.EdgeMargin);
+var automaticRect = new Rect(automatic, new Size(360, 360));
+Require(automaticRect.Left >= 16 && automaticRect.Top >= 16 &&
+        automaticRect.Right <= automaticWork.Right - 16 && automaticRect.Bottom <= automaticWork.Bottom - 16,
+    "automatic placement put a widget outside the safe work area");
+Require(!automaticOccupied.Any(other => Overlaps(automaticRect, other)),
+    "automatic placement overlapped an existing widget despite available space");
+
+var crowded = Placement.FindAutomaticPosition(new Size(360, 360),
+    new[] { new Rect(16, 16, 900, 600) }, automaticWork, Placement.Unit, Placement.EdgeMargin);
+var crowdedRect = new Rect(crowded, new Size(360, 360));
+Require(crowdedRect.Left >= 16 && crowdedRect.Top >= 16 &&
+        crowdedRect.Right <= automaticWork.Right - 16 && crowdedRect.Bottom <= automaticWork.Bottom - 16,
+    "crowded automatic placement failed to keep the widget visible");
+
+Require(AppUpdate.IsNewerRelease("v0.4.1", new Version(0, 4, 0)),
+    "update comparison missed a newer tagged release");
+Require(!AppUpdate.IsNewerRelease("v0.4.0", new Version(0, 4, 0)),
+    "update comparison treated the current release as newer");
+Require(!AppUpdate.IsNewerRelease("nightly", new Version(0, 4, 0)),
+    "update comparison accepted a non-version tag");
+Require(ExternalLaunch.TryNormalizeHttpUri("example.com/docs", out var normalizedLink) &&
+        normalizedLink.AbsoluteUri == "https://example.com/docs",
+    "quick-link URL normalization failed");
+Require(!ExternalLaunch.TryNormalizeHttpUri("javascript:alert(1)", out _),
+    "quick-link validation accepted a non-HTTP scheme");
+Require(WidgetRegistry.Kinds.Contains("calculator") && WidgetRegistry.Kinds.Contains("links") &&
+        WidgetRegistry.Configurable("links"),
+    "original utility widgets are missing from the registry");
+Require(WidgetRegistry.SizesOf("calculator").SequenceEqual(new[] { "l" }) &&
+        WidgetRegistry.DefaultSize("calculator") == "l" &&
+        WidgetRegistry.Size("calculator", "l") == (360d, 360d),
+    "calculator must remain a Large-only widget");
+Require(WidgetRegistry.Kinds.Contains("timer") && WidgetRegistry.Kinds.Contains("note") &&
+        WidgetRegistry.SizesOf("timer").SequenceEqual(new[] { "m" }) &&
+        WidgetRegistry.SizesOf("note").SequenceEqual(new[] { "l" }) &&
+        WidgetRegistry.Configurable("note"),
+    "local focus timer and note widgets are not registered with their intended sizes");
+Require(WidgetRegistry.Kinds.Contains("awake") && WidgetRegistry.Kinds.Contains("qr") &&
+        WidgetRegistry.SizesOf("awake").SequenceEqual(new[] { "m" }) &&
+        WidgetRegistry.SizesOf("qr").SequenceEqual(new[] { "l" }) &&
+        WidgetRegistry.Configurable("qr"),
+    "keep-awake and offline QR widgets are not registered with their intended sizes");
+
+using (var awakeDoc = JsonDocument.Parse("""{"active":true,"endUtc":"2026-08-30T12:30:00Z","keepDisplay":true}"""))
+{
+    Require(KeepAwakeManager.TryRead(awakeDoc.RootElement, out var awakeRequest) &&
+            awakeRequest.EndUtc == DateTimeOffset.Parse("2026-08-30T12:30:00Z") && awakeRequest.KeepDisplayOn,
+        "timed keep-awake configuration could not be restored");
+}
+using (var invalidAwakeDoc = JsonDocument.Parse("""{"active":true,"endUtc":"not-a-date"}"""))
+    Require(!KeepAwakeManager.TryRead(invalidAwakeDoc.RootElement, out _),
+        "keep-awake accepted an invalid end timestamp");
+
+using (var qrData = QRCodeGenerator.GenerateQrCode("https://github.com/Nishikinonakai/MacWidget", QRCodeGenerator.ECCLevel.Q))
+using (var qr = new PngByteQRCode(qrData))
+{
+    var png = qr.GetGraphic(2);
+    Require(png.Length > 8 && png[0] == 0x89 && png[1] == 0x50 && png[2] == 0x4e && png[3] == 0x47,
+        "offline QR generator did not produce a PNG image");
+}
+
+Console.WriteLine("Scenarios passed: layout migration/compaction, automatic placement, update versions, safe links, utility registry.");
+
+if (args.Contains("--check-update-network", StringComparer.OrdinalIgnoreCase))
+{
+    var update = await AppUpdate.CheckAsync(new Version(0, 4, 0));
+    Console.WriteLine($"GitHub update endpoint: {update.Status}; latest={update.LatestVersion ?? "n/a"}; error={update.Error ?? "none"}");
+}

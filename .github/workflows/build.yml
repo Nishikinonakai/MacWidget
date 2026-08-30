@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: macwidget-build-${{ github.ref }}
@@ -39,7 +39,7 @@ jobs:
           $version = if ('${{ github.ref_type }}' -eq 'tag') {
             '${{ github.ref_name }}'.TrimStart('v')
           } else {
-            "0.2.0-ci.$env:GITHUB_RUN_NUMBER"
+            "0.4.0-ci.$env:GITHUB_RUN_NUMBER"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
           dotnet restore src/WidgetProto/WidgetProto.csproj --runtime win-x64
@@ -50,7 +50,7 @@ jobs:
       - name: Validate Windows operational scripts
         shell: pwsh
         run: |
-          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\stage-store-wallpaper.ps1', 'tools\verify-installer.ps1', 'tools\prepare-steampipe.ps1', 'tools\verify-steam-content.ps1')) {
+          foreach ($relativePath in @('tools\smoke-installed.ps1', 'tools\stage-store-wallpaper.ps1', 'tools\verify-installer.ps1')) {
             $script = Join-Path $env:GITHUB_WORKSPACE $relativePath
             $tokens = $null
             $errors = $null
@@ -72,23 +72,30 @@ jobs:
         run: |
           $notices = Join-Path $env:GITHUB_WORKSPACE 'publish\THIRD-PARTY-NOTICES.md'
           $privacy = Join-Path $env:GITHUB_WORKSPACE 'publish\PRIVACY.md'
+          $license = Join-Path $env:GITHUB_WORKSPACE 'publish\LICENSE'
           if (-not (Test-Path -LiteralPath $notices -PathType Leaf)) {
             throw 'THIRD-PARTY-NOTICES.md was not copied to the publish directory.'
           }
           if (-not (Test-Path -LiteralPath $privacy -PathType Leaf)) {
             throw 'PRIVACY.md was not copied to the publish directory.'
           }
+          if (-not (Test-Path -LiteralPath $license -PathType Leaf)) {
+            throw 'LICENSE was not copied to the publish directory.'
+          }
           $text = Get-Content -LiteralPath $notices -Raw
-          foreach ($requiredText in @('Microsoft.Web.WebView2', 'MET Norway', 'CC BY 4.0')) {
+          foreach ($requiredText in @('Microsoft.Web.WebView2', 'QRCoder 1.8.0', 'The MIT License', 'MET Norway', 'CC BY 4.0')) {
             if ($text -notlike "*$requiredText*") {
               throw "Published third-party notices are missing: $requiredText"
             }
           }
           $privacyText = Get-Content -LiteralPath $privacy -Raw
-          foreach ($requiredText in @('MET Norway', 'IP address', 'geocoordinates', 'MacWidget')) {
+          foreach ($requiredText in @('MET Norway', 'IP address', 'geocoordinates', 'MacWidget', 'GitHub', 'Quick Links', 'Local Note', 'Focus Timer', 'Keep Awake', 'Offline QR')) {
             if ($privacyText -notlike "*$requiredText*") {
               throw "Published privacy notice is missing: $requiredText"
             }
+          }
+          if ((Get-Content -LiteralPath $license -Raw) -notlike '*GNU GENERAL PUBLIC LICENSE*Version 3*') {
+            throw 'Published LICENSE is not the expected GPL-3.0 text.'
           }
 
       - name: Verify self-contained .NET runtime
@@ -99,32 +106,6 @@ jobs:
               throw "Self-contained publish is missing $runtimeFile."
             }
           }
-
-      - name: Write Steam content SHA-256 manifest
-        shell: pwsh
-        run: |
-          $contentRoot = (Resolve-Path publish).Path
-          $manifestDir = Join-Path $env:GITHUB_WORKSPACE 'steam-content'
-          New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
-          $manifest = Join-Path $manifestDir "MacWidget-Steam-Content-${{ steps.version.outputs.version }}.sha256"
-          $entries = @(
-            Get-ChildItem -LiteralPath $contentRoot -Recurse -File |
-              Sort-Object FullName |
-              ForEach-Object {
-                $relative = $_.FullName.Substring($contentRoot.Length).TrimStart('\') -replace '\\', '/'
-                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "$hash *$relative"
-              }
-          )
-          if ($entries.Count -eq 0) { throw 'Steam content publish directory is empty.' }
-          Set-Content -LiteralPath $manifest -Value $entries -Encoding ascii
-
-      - name: Verify Steam content SHA-256 manifest
-        shell: pwsh
-        run: |
-          $manifests = @(Get-ChildItem steam-content -Filter 'MacWidget-Steam-Content-*.sha256' -File)
-          if ($manifests.Count -ne 1) { throw "Expected one Steam content manifest, found $($manifests.Count)." }
-          & tools/verify-steam-content.ps1 -ContentRoot publish -ChecksumPath $manifests[0].FullName
 
       - name: Validate embedded WebView2 bootstrapper
         shell: pwsh
@@ -152,7 +133,7 @@ jobs:
           "$hash *$($installer.Name)" | Set-Content -LiteralPath "$($installer.FullName).sha256" -NoNewline
           Copy-Item tools/verify-installer.ps1 installer/Verify-MacWidgetInstaller.ps1
 
-      - name: Upload private installer artifact
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v7
         with:
           name: MacWidget-Setup-${{ steps.version.outputs.version }}
@@ -163,13 +144,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload private Steam content artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: MacWidget-Steam-Content-${{ steps.version.outputs.version }}
-          path: |
-            publish/**
-            steam-content/MacWidget-Steam-Content-*.sha256
-            tools/verify-steam-content.ps1
-          if-no-files-found: error
-          retention-days: 14
+      - name: Publish tagged GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installers = @(Get-ChildItem installer -Filter 'MacWidget-Setup-v*.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected one installer, found $($installers.Count)." }
+          $installer = $installers[0].FullName
+          gh release create '${{ github.ref_name }}' `
+            $installer "$installer.sha256" 'installer\Verify-MacWidgetInstaller.ps1' `
+            --verify-tag --generate-notes --title "MacWidget ${{ github.ref_name }}"
