@@ -82,19 +82,20 @@ jobs:
           if (-not (Test-Path -LiteralPath $license -PathType Leaf)) {
             throw 'LICENSE was not copied to the publish directory.'
           }
-          $text = Get-Content -LiteralPath $notices -Raw
+          $text = (Get-Content -LiteralPath $notices -Raw) -replace '\s+', ' '
           foreach ($requiredText in @('Microsoft.Web.WebView2', 'QRCoder 1.8.0', 'The MIT License', 'MET Norway', 'CC BY 4.0')) {
             if ($text -notlike "*$requiredText*") {
               throw "Published third-party notices are missing: $requiredText"
             }
           }
-          $privacyText = Get-Content -LiteralPath $privacy -Raw
+          $privacyText = (Get-Content -LiteralPath $privacy -Raw) -replace '\s+', ' '
           foreach ($requiredText in @('MET Norway', 'IP address', 'geocoordinates', 'MacWidget', 'GitHub', 'Quick Links', 'Local Note', 'Focus Timer', 'Keep Awake', 'Offline QR')) {
             if ($privacyText -notlike "*$requiredText*") {
               throw "Published privacy notice is missing: $requiredText"
             }
           }
-          if ((Get-Content -LiteralPath $license -Raw) -notlike '*GNU GENERAL PUBLIC LICENSE*Version 3*') {
+          $licenseText = (Get-Content -LiteralPath $license -Raw) -replace '\s+', ' '
+          if ($licenseText -notlike '*GNU GENERAL PUBLIC LICENSE*Version 3*') {
             throw 'Published LICENSE is not the expected GPL-3.0 text.'
           }
 
